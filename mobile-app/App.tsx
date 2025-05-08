@@ -2,12 +2,8 @@ import 'react-native-url-polyfill/auto';
 import 'react-native-get-random-values'; // Required for UUID generation
 
 // Fix for fetch timeout issues with Supabase
-import { Platform } from 'react-native';
+import { Platform, LogBox, AppRegistry, StyleSheet, View } from 'react-native';
 if (Platform.OS !== 'web') {
-  // Completely disable WebSocket for React Native
-  // @ts-ignore
-  global.WebSocket = null;
-  
   // Timeout fix for React Native
   const originalFetch = global.fetch;
   global.fetch = (url, options = {}) => {
@@ -17,10 +13,14 @@ if (Platform.OS !== 'web') {
       timeout: 60000, // 60 seconds
     });
   };
+  
+  // Disable HMR to fix "Cannot read property 'prototype' of null" error
+  if (__DEV__ && typeof global.HermesInternal === 'object') {
+    (global as any).HMRClient = null;
+  }
 }
 
 import React from 'react';
-import { LogBox, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Provider as ReduxProvider } from 'react-redux';

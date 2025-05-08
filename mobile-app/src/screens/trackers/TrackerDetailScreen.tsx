@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Alert,
   Switch,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -19,13 +20,120 @@ import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MainStackParamList } from '../../navigation';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline } from 'react-native-maps';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE, MapStyleElement } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type TrackerDetailScreenProps = {
   route: RouteProp<MainStackParamList, 'TrackerDetail'>;
   navigation: StackNavigationProp<MainStackParamList, 'TrackerDetail'>;
 };
+
+const mapCustomStyle = [
+  {
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#f5f5f5"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.icon",
+    "stylers": [
+      {
+        "visibility": "off"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#616161"
+      }
+    ]
+  },
+  {
+    "elementType": "labels.text.stroke",
+    "stylers": [
+      {
+        "color": "#f5f5f5"
+      }
+    ]
+  },
+  {
+    "featureType": "administrative.land_parcel",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#bdbdbd"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#eeeeee"
+      }
+    ]
+  },
+  {
+    "featureType": "poi",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#757575"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#e5e5e5"
+      }
+    ]
+  },
+  {
+    "featureType": "poi.park",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#9e9e9e"
+      }
+    ]
+  },
+  {
+    "featureType": "road",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#ffffff"
+      }
+    ]
+  },
+  {
+    "featureType": "road.arterial",
+    "elementType": "labels.text.fill",
+    "stylers": [
+      {
+        "color": "#757575"
+      }
+    ]
+  },
+  {
+    "featureType": "road.highway",
+    "elementType": "geometry",
+    "stylers": [
+      {
+        "color": "#dadada"
+      }
+    ]
+  }
+];
 
 const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, navigation }) => {
   const { trackerId } = route.params;
@@ -49,6 +157,95 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
       navigation.setOptions({ title: tracker.name });
     }
   }, [tracker, navigation]);
+
+  // Add a state to track marker coordinates
+  const [markerCoordinate, setMarkerCoordinate] = useState({
+    latitude: tracker?.lastSeen?.latitude || 37.7749,
+    longitude: tracker?.lastSeen?.longitude || -122.4194,
+  });
+  
+  // Define map region
+  const [region, setRegion] = useState({
+    latitude: tracker?.lastSeen?.latitude || 37.7749,
+    longitude: tracker?.lastSeen?.longitude || -122.4194,
+    latitudeDelta: 0.005,
+    longitudeDelta: 0.005,
+  });
+
+  // Update marker coordinates and force map update when tracker location changes
+  useEffect(() => {
+    if (tracker && tracker.lastSeen) {
+      console.log("Tracker location updated:", tracker.lastSeen);
+      
+      // Ensure we have valid coordinates (proper numbers)
+      const latitude = parseFloat(tracker.lastSeen.latitude.toString());
+      const longitude = parseFloat(tracker.lastSeen.longitude.toString());
+      
+      if (!isNaN(latitude) && !isNaN(longitude)) {
+        // Update marker coordinate
+        setMarkerCoordinate({
+          latitude,
+          longitude,
+        });
+        
+        // Update map region to focus on the marker
+        setRegion({
+          latitude,
+          longitude,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        });
+        
+        // Force map to recenter if we have a ref to it
+        if (mapRef.current) {
+          try {
+            // Add a delay to ensure map is ready
+            setTimeout(() => {
+              console.log("Forcing map update to coordinates:", latitude, longitude);
+              mapRef.current?.animateCamera({
+                center: {
+                  latitude,
+                  longitude,
+                },
+                zoom: 17,
+              }, { duration: 500 });
+            }, 500);
+          } catch (error) {
+            console.error("Error animating map:", error);
+          }
+        }
+      }
+    }
+  }, [tracker?.lastSeen]);
+
+  // Force an initial update when component mounts
+  useEffect(() => {
+    // When component mounts, force map to update after a delay to ensure map is ready
+    if (tracker?.lastSeen) {
+      const timer = setTimeout(() => {
+        if (mapRef.current) {
+          const latitude = parseFloat(tracker.lastSeen.latitude.toString());
+          const longitude = parseFloat(tracker.lastSeen.longitude.toString());
+          
+          console.log("Initial map update to coordinates:", latitude, longitude);
+          
+          try {
+            mapRef.current.animateCamera({
+              center: {
+                latitude,
+                longitude,
+              },
+              zoom: 17,
+            }, { duration: 500 });
+          } catch (error) {
+            console.error("Error in initial map animation:", error);
+          }
+        }
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   if (!tracker) {
     return (
@@ -78,8 +275,24 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
       stopTrackerSimulation(trackerId);
       setIsSimulating(false);
     } else {
+      // Start the simulation with the current pattern
       startTrackerSimulation(trackerId, simulationPattern);
       setIsSimulating(true);
+      
+      // Automatically show location history when simulating
+      if (!showLocationHistory) {
+        setShowLocationHistory(true);
+      }
+      
+      // Make sure the map is properly centered on the current location
+      if (mapRef.current && tracker.lastSeen) {
+        mapRef.current.animateToRegion({
+          latitude: tracker.lastSeen.latitude,
+          longitude: tracker.lastSeen.longitude,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        }, 500);
+      }
     }
   };
 
@@ -107,16 +320,29 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
         points.push(tracker.lastSeen);
       }
       
-      mapRef.current.fitToCoordinates(
-        points.map(point => ({
-          latitude: point.latitude,
-          longitude: point.longitude,
-        })),
-        {
-          edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-          animated: true,
-        }
-      );
+      // Make sure we have valid coordinates
+      const validPoints = points
+        .filter(point => 
+          point && 
+          !isNaN(parseFloat(point.latitude.toString())) && 
+          !isNaN(parseFloat(point.longitude.toString()))
+        )
+        .map(point => ({
+          latitude: parseFloat(point.latitude.toString()),
+          longitude: parseFloat(point.longitude.toString()),
+        }));
+      
+      if (validPoints.length > 0) {
+        console.log("Fitting map to coordinates:", validPoints);
+        
+        mapRef.current.fitToCoordinates(
+          validPoints,
+          {
+            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+            animated: true,
+          }
+        );
+      }
     }
   };
 
@@ -136,84 +362,131 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
         {/* Map Section */}
         <View style={styles.mapContainer}>
           {tracker.lastSeen && (
-            <MapView
-              ref={mapRef}
-              style={styles.map}
-
-              initialRegion={{
-                latitude: tracker.lastSeen.latitude,
-                longitude: tracker.lastSeen.longitude,
-                latitudeDelta: 0.01,
-                longitudeDelta: 0.01,
-              }}
-              showsUserLocation
-            >
-              <Marker
-                coordinate={{
-                  latitude: tracker.lastSeen.latitude,
-                  longitude: tracker.lastSeen.longitude,
+            <>
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                initialRegion={region}
+                region={region}
+                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+                showsUserLocation={false}
+                followsUserLocation={false}
+                customMapStyle={mapCustomStyle}
+                zoomControlEnabled={true}
+                zoomEnabled={true}
+                rotateEnabled={true}
+                onMapReady={() => {
+                  console.log("Map is ready!");
+                  if (mapRef.current && tracker.lastSeen) {
+                    // Force re-render by slightly delaying the animation
+                    setTimeout(() => {
+                      console.log("Animating to marker region", tracker.lastSeen);
+                      try {
+                        // Use animateCamera instead of animateToRegion for better precision
+                        mapRef.current?.animateCamera({
+                          center: {
+                            latitude: parseFloat(tracker.lastSeen.latitude.toString()),
+                            longitude: parseFloat(tracker.lastSeen.longitude.toString()),
+                          },
+                          zoom: 17,
+                        }, { duration: 500 });
+                        
+                        // Force marker update
+                        setMarkerCoordinate({
+                          latitude: parseFloat(tracker.lastSeen.latitude.toString()),
+                          longitude: parseFloat(tracker.lastSeen.longitude.toString()),
+                        });
+                      } catch (error) {
+                        console.error("Error animating map:", error);
+                      }
+                    }, 300);
+                  }
                 }}
-                title={tracker.name}
-                description={`Last seen: ${formatTimestamp(tracker.lastSeen.timestamp)}`}
-                pinColor={tracker.type === 'physical' ? '#007AFF' : '#FF9500'}
-              />
-              
-              {showLocationHistory && tracker.locationHistory && tracker.locationHistory.length > 1 && (
-                <>
-                  <Polyline
-                    coordinates={tracker.locationHistory.map(point => ({
-                      latitude: point.latitude,
-                      longitude: point.longitude,
-                    }))}
-                    strokeColor="#007AFF"
-                    strokeWidth={3}
-                  />
-                  
-                  {tracker.locationHistory.map((point, index) => (
-                    index > 0 && index < tracker.locationHistory.length - 1 && (
-                      <Marker
-                        key={`history-${index}`}
-                        coordinate={{
-                          latitude: point.latitude,
-                          longitude: point.longitude,
-                        }}
-                        title={`Location History`}
-                        description={`${formatTimestamp(point.timestamp)}`}
-                        pinColor="gray"
-                        opacity={0.7}
-                      />
-                    )
-                  ))}
-                </>
-              )}
-            </MapView>
-          )}
-          
-          <View style={styles.mapControls}>
-            <TouchableOpacity
-              style={styles.mapControlButton}
-              onPress={() => setShowLocationHistory(!showLocationHistory)}
-            >
-              <Ionicons
-                name={showLocationHistory ? 'trail-sign' : 'trail-sign-outline'}
-                size={24}
-                color="#007AFF"
-              />
-              <Text style={styles.mapControlText}>
-                {showLocationHistory ? 'Hide History' : 'Show History'}
-              </Text>
-            </TouchableOpacity>
-            
-            {showLocationHistory && tracker.locationHistory && tracker.locationHistory.length > 1 && (
-              <TouchableOpacity
-                style={styles.mapControlButton}
-                onPress={zoomToFitMarkers}
               >
-                <Ionicons name="expand-outline" size={24} color="#007AFF" />
-                <Text style={styles.mapControlText}>Fit All Points</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+                {/* Current location marker */}
+                {tracker.lastSeen && (
+                  <>
+                    {/* Main marker */}
+                    <Marker
+                      key={`current-${tracker.id}-${Date.now()}`} 
+                      identifier={tracker.id}
+                      coordinate={{
+                        latitude: parseFloat(tracker.lastSeen.latitude.toString()),
+                        longitude: parseFloat(tracker.lastSeen.longitude.toString()),
+                      }}
+                      title={tracker.name}
+                      description={`Last seen: ${formatTimestamp(tracker.lastSeen.timestamp)}`}
+                      pinColor={tracker.type === 'physical' ? '#007AFF' : '#FF9500'}
+                      tracksViewChanges={true}
+                    />
+                  </>
+                )}
+                
+                {/* History polyline and markers */}
+                {showLocationHistory && tracker.locationHistory && tracker.locationHistory.length > 1 && (
+                  <>
+                    <Polyline
+                      coordinates={tracker.locationHistory.map(point => ({
+                        latitude: parseFloat(point.latitude.toString()),
+                        longitude: parseFloat(point.longitude.toString()),
+                      }))}
+                      strokeColor="#007AFF"
+                      strokeWidth={5}
+                    />
+                    
+                    {tracker.locationHistory.map((point, index) => (
+                      ((index > 0 && index < tracker.locationHistory.length - 1) || index % 5 === 0) && (
+                        <Marker
+                          key={`history-${index}`}
+                          coordinate={{
+                            latitude: parseFloat(point.latitude.toString()),
+                            longitude: parseFloat(point.longitude.toString()),
+                          }}
+                          title={`Location History`}
+                          description={`${formatTimestamp(point.timestamp)}`}
+                          pinColor="gray"
+                          opacity={0.7}
+                          tracksViewChanges={true}
+                        />
+                      )
+                    ))}
+                  </>
+                )}
+              </MapView>
+              
+              <View style={styles.debugOverlay}>
+                <Text style={styles.debugText}>
+                  Location: {markerCoordinate.latitude.toFixed(6)}, {markerCoordinate.longitude.toFixed(6)}
+                </Text>
+              </View>
+              
+              <View style={styles.mapControls}>
+                <TouchableOpacity
+                  style={styles.mapControlButton}
+                  onPress={() => setShowLocationHistory(!showLocationHistory)}
+                >
+                  <Ionicons
+                    name={showLocationHistory ? 'trail-sign' : 'trail-sign-outline'}
+                    size={24}
+                    color="#007AFF"
+                  />
+                  <Text style={styles.mapControlText}>
+                    {showLocationHistory ? 'Hide History' : 'Show History'}
+                  </Text>
+                </TouchableOpacity>
+                
+                {showLocationHistory && tracker.locationHistory && tracker.locationHistory.length > 1 && (
+                  <TouchableOpacity
+                    style={styles.mapControlButton}
+                    onPress={zoomToFitMarkers}
+                  >
+                    <Ionicons name="expand-outline" size={24} color="#007AFF" />
+                    <Text style={styles.mapControlText}>Fit All Points</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </>
+          )}
         </View>
         
         {/* Tracker Info Section */}
@@ -406,9 +679,23 @@ const styles = StyleSheet.create({
     height: 300,
     width: '100%',
     marginBottom: 16,
+    position: 'relative',
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+  },
+  debugOverlay: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 5,
+    borderRadius: 5,
+    zIndex: 999,
+  },
+  debugText: {
+    color: 'white',
+    fontSize: 10,
   },
   mapControls: {
     position: 'absolute',
@@ -417,6 +704,7 @@ const styles = StyleSheet.create({
     right: 16,
     flexDirection: 'row',
     justifyContent: 'space-around',
+    zIndex: 999,
   },
   mapControlButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
@@ -428,7 +716,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.2,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: 5,
   },
   mapControlText: {
     marginLeft: 4,

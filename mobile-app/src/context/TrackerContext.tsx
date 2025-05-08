@@ -82,13 +82,9 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const { user } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
-    // Load trackers when user changes
-    if (user) {
-      loadTrackers();
-    } else {
-      // Clear trackers when user logs out
-      dispatch(setTrackers([]));
-    }
+    // Load trackers when component mounts or user changes
+    console.log("TrackerProvider mounted or user changed:", user?.id);
+    loadTrackers();
 
     // Clean up any simulations on unmount
     return () => {
@@ -100,10 +96,9 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   }, [user]);
 
   const loadTrackers = async () => {
-    if (!user) return;
-    
     try {
       dispatch(setTrackerLoading(true));
+      console.log("Loading trackers for user:", user?.id || "no user");
       
       // In a real implementation, fetch from Supabase
       // For now, we'll simulate with dummy data
@@ -134,8 +129,10 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         },
       ];
       
+      console.log("Setting dummy trackers:", dummyTrackers);
       dispatch(setTrackers(dummyTrackers));
     } catch (error) {
+      console.error("Error loading trackers:", error);
       dispatch(setTrackerError((error as Error).message));
     } finally {
       dispatch(setTrackerLoading(false));
@@ -145,6 +142,7 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const createVirtualTracker = async (name: string, initialLocation?: LocationPoint): Promise<Tracker> => {
     try {
       dispatch(setTrackerLoading(true));
+      console.log("Creating virtual tracker with name:", name);
       
       let location: LocationPoint;
       if (!initialLocation) {
@@ -152,6 +150,8 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       } else {
         location = initialLocation;
       }
+      
+      console.log("Tracker location:", location);
       
       // Generate a unique ID
       const trackerId = generateUUID();
@@ -165,11 +165,14 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         locationHistory: [location],
       };
       
+      console.log("New tracker created:", newTracker);
+      
       // In a real implementation, save to Supabase
       
       dispatch(addTracker(newTracker));
       return newTracker;
     } catch (error) {
+      console.error("Error creating tracker:", error);
       dispatch(setTrackerError((error as Error).message));
       throw error;
     } finally {
@@ -249,6 +252,15 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let direction = options.direction || 0; // Radians
     let speed = options.speed || 0.00005; // About 5m per update
     
+    console.log(`Starting ${pattern} simulation for tracker ${id}, starting at:`, startLocation);
+    
+    // Immediately update the tracker location to ensure it's set
+    moveVirtualTracker(id, {
+      latitude: startLocation.latitude,
+      longitude: startLocation.longitude,
+      timestamp: Date.now(),
+    });
+    
     simulationIntervals[id] = setInterval(() => {
       let newLat, newLng;
       
@@ -274,12 +286,15 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
           break;
       }
       
-      moveVirtualTracker(id, {
+      const newLocation = {
         latitude: newLat,
         longitude: newLng,
         timestamp: Date.now(),
-      });
-    }, 3000); // Update every 3 seconds
+      };
+      
+      console.log(`Simulation update for tracker ${id}:`, newLocation);
+      moveVirtualTracker(id, newLocation);
+    }, 2000); // Update every 2 seconds (faster for better visual effect)
   };
 
   const stopTrackerSimulation = (id: string) => {

@@ -84,6 +84,9 @@ const MapScreen: React.FC = () => {
       }
     };
 
+    // Debug trackers in the Redux store
+    console.log("Current trackers in MapScreen:", Object.values(trackers));
+
     getLocation();
 
     // Set up location subscription
@@ -101,7 +104,7 @@ const MapScreen: React.FC = () => {
       // Clean up subscription
       locationSubscription.then((sub) => sub.remove());
     };
-  }, [selectedTrackerId]);
+  }, [selectedTrackerId, trackers]);
 
   const handleMarkerPress = (trackerId: string) => {
     dispatch(setSelectedTracker(trackerId));
