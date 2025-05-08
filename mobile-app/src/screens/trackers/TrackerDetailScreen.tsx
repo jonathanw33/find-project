@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -13,14 +13,14 @@ import {
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
-import { updateTracker } from '../../redux/slices/trackerSlice';
+// import { updateTracker } from '../../redux/slices/trackerSlice'; // Not used directly, dispatch is used with actions
 import { useTracker } from '../../context/TrackerContext';
 import { useAlert } from '../../context/AlertContext';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MainStackParamList } from '../../navigation';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE, MapStyleElement } from 'react-native-maps';
+import MapView, { Marker, Polyline, Region } from 'react-native-maps'; // Added Region type
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 type TrackerDetailScreenProps = {
@@ -28,118 +28,25 @@ type TrackerDetailScreenProps = {
   navigation: StackNavigationProp<MainStackParamList, 'TrackerDetail'>;
 };
 
-const mapCustomStyle = [
-  {
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#f5f5f5"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.icon",
-    "stylers": [
-      {
-        "visibility": "off"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#616161"
-      }
-    ]
-  },
-  {
-    "elementType": "labels.text.stroke",
-    "stylers": [
-      {
-        "color": "#f5f5f5"
-      }
-    ]
-  },
-  {
-    "featureType": "administrative.land_parcel",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#bdbdbd"
-      }
-    ]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#eeeeee"
-      }
-    ]
-  },
-  {
-    "featureType": "poi",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#e5e5e5"
-      }
-    ]
-  },
-  {
-    "featureType": "poi.park",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#9e9e9e"
-      }
-    ]
-  },
-  {
-    "featureType": "road",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#ffffff"
-      }
-    ]
-  },
-  {
-    "featureType": "road.arterial",
-    "elementType": "labels.text.fill",
-    "stylers": [
-      {
-        "color": "#757575"
-      }
-    ]
-  },
-  {
-    "featureType": "road.highway",
-    "elementType": "geometry",
-    "stylers": [
-      {
-        "color": "#dadada"
-      }
-    ]
-  }
-];
+const defaultRegion = {
+  latitude: 37.7749,
+  longitude: -122.4194,
+  latitudeDelta: 0.01,
+  longitudeDelta: 0.01,
+};
 
 const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, navigation }) => {
   const { trackerId } = route.params;
+  
+  // Add super detailed logging at the beginning
+  console.log(`--- TrackerDetailScreen RENDER START (Tracker ID: ${trackerId}) ---`);
+  
   const { trackers } = useSelector((state: RootState) => state.trackers);
   const tracker = trackers[trackerId];
-  const dispatch = useDispatch();
+  
+  console.log('Tracker from Redux:', JSON.stringify(tracker, null, 2));
+  
+  const dispatch = useDispatch(); // Kept if other dispatches are needed later
   const { updateTrackerDetails, startTrackerSimulation, stopTrackerSimulation } = useTracker();
   const { simulateLeftBehindAlert } = useAlert();
   const [loading, setLoading] = useState(false);
@@ -148,120 +55,93 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
   const [simulationPattern, setSimulationPattern] = useState<'random' | 'circle' | 'line'>('random');
   const mapRef = useRef<MapView>(null);
 
+  const [region, setRegion] = useState<Region>(() => {
+    if (tracker?.lastSeen) {
+      return {
+        latitude: tracker.lastSeen.latitude,
+        longitude: tracker.lastSeen.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+    }
+    return defaultRegion;
+  });
+
+  // Simplified useEffect for region updates
   useEffect(() => {
     if (!tracker) {
-      Alert.alert('Error', 'Tracker not found');
-      navigation.goBack();
-    } else {
-      // Set the title to the tracker name
-      navigation.setOptions({ title: tracker.name });
+      console.warn('TrackerDetailScreen - useEffect: Tracker is null, cannot set title or region.');
+      return;
     }
-  }, [tracker, navigation]);
 
-  // Add a state to track marker coordinates
-  const [markerCoordinate, setMarkerCoordinate] = useState({
-    latitude: tracker?.lastSeen?.latitude || 37.7749,
-    longitude: tracker?.lastSeen?.longitude || -122.4194,
-  });
-  
-  // Define map region
-  const [region, setRegion] = useState({
-    latitude: tracker?.lastSeen?.latitude || 37.7749,
-    longitude: tracker?.lastSeen?.longitude || -122.4194,
-    latitudeDelta: 0.005,
-    longitudeDelta: 0.005,
-  });
+    console.log(`TrackerDetailScreen - useEffect [tracker] fired. Tracker name: ${tracker.name}`);
+    navigation.setOptions({ title: tracker.name });
 
-  // Update marker coordinates and force map update when tracker location changes
-  useEffect(() => {
-    if (tracker && tracker.lastSeen) {
-      console.log("Tracker location updated:", tracker.lastSeen);
-      
-      // Ensure we have valid coordinates (proper numbers)
-      const latitude = parseFloat(tracker.lastSeen.latitude.toString());
-      const longitude = parseFloat(tracker.lastSeen.longitude.toString());
-      
-      if (!isNaN(latitude) && !isNaN(longitude)) {
-        // Update marker coordinate
-        setMarkerCoordinate({
-          latitude,
-          longitude,
-        });
-        
-        // Update map region to focus on the marker
-        setRegion({
-          latitude,
-          longitude,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-        });
-        
-        // Force map to recenter if we have a ref to it
-        if (mapRef.current) {
-          try {
-            // Add a delay to ensure map is ready
-            setTimeout(() => {
-              console.log("Forcing map update to coordinates:", latitude, longitude);
-              mapRef.current?.animateCamera({
-                center: {
-                  latitude,
-                  longitude,
-                },
-                zoom: 17,
-              }, { duration: 500 });
-            }, 500);
-          } catch (error) {
-            console.error("Error animating map:", error);
-          }
-        }
+    // Don't update the region or do major animations if we're in simulation mode
+    // This prevents jarring refreshes during simulation
+    if (isSimulating && tracker.lastSeen) {
+      // During simulation, just smoothly update the marker position without resetting the view
+      if (mapRef.current) {
+        // Use a gentle animation if the user isn't actively panning the map
+        mapRef.current.animateCamera({
+          center: {
+            latitude: tracker.lastSeen.latitude,
+            longitude: tracker.lastSeen.longitude,
+          },
+          // Keep the current zoom level
+          // Don't use zoom: explicitly which would change the zoom level
+        }, { duration: 500 });
       }
+      return;
     }
-  }, [tracker?.lastSeen]);
 
-  // Force an initial update when component mounts
-  useEffect(() => {
-    // When component mounts, force map to update after a delay to ensure map is ready
-    if (tracker?.lastSeen) {
-      const timer = setTimeout(() => {
+    // Only do full region updates when not in simulation mode or on first load
+    if (tracker.lastSeen && typeof tracker.lastSeen.latitude === 'number' && typeof tracker.lastSeen.longitude === 'number') {
+      const newLatitude = tracker.lastSeen.latitude;
+      const newLongitude = tracker.lastSeen.longitude;
+
+      console.log(`TrackerDetailScreen - useEffect: Valid lastSeen. Lat: ${newLatitude}, Lon: ${newLongitude}. Current region state before setRegion:`, JSON.stringify(region));
+
+      const newMapRegion = {
+        latitude: newLatitude,
+        longitude: newLongitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+
+      setRegion(newMapRegion); // Update the region state
+
+      // Animate to the region
+      setTimeout(() => { // Small delay to ensure mapRef might be ready
         if (mapRef.current) {
-          const latitude = parseFloat(tracker.lastSeen.latitude.toString());
-          const longitude = parseFloat(tracker.lastSeen.longitude.toString());
+          console.log('TrackerDetailScreen - useEffect (delayed): Animating map to new region:', JSON.stringify(newMapRegion));
+          mapRef.current.animateToRegion(newMapRegion, 500);
           
-          console.log("Initial map update to coordinates:", latitude, longitude);
-          
-          try {
-            mapRef.current.animateCamera({
-              center: {
-                latitude,
-                longitude,
-              },
-              zoom: 17,
-            }, { duration: 500 });
-          } catch (error) {
-            console.error("Error in initial map animation:", error);
-          }
+          // Also try using fitToCoordinates after a slightly longer delay
+          setTimeout(() => {
+            if (mapRef.current) {
+              zoomToFitMarkers();
+              console.log('TrackerDetailScreen - useEffect: Called zoomToFitMarkers');
+            }
+          }, 1000);
+        } else {
+          console.warn('TrackerDetailScreen - useEffect (delayed): mapRef.current STILL null.');
         }
-      }, 1000);
-      
-      return () => clearTimeout(timer);
+      }, 100); // 100ms delay, adjust if needed
+    } else {
+      console.warn('TrackerDetailScreen - useEffect: tracker.lastSeen is missing or has invalid coordinates.', JSON.stringify(tracker.lastSeen));
     }
-  }, []);
-
-  if (!tracker) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007AFF" />
-      </View>
-    );
-  }
+  }, [tracker, isSimulating]); // Added isSimulating to dependencies
 
   const handleToggleActive = async () => {
+    if (!tracker) return;
     try {
       setLoading(true);
       await updateTrackerDetails(trackerId, { isActive: !tracker.isActive });
-      
-      if (!tracker.isActive) {
+      if (!tracker.isActive) { // Note: tracker.isActive here is the value *before* the update
         Alert.alert('Tracker Activated', `${tracker.name} is now active and will send location updates.`);
+      } else {
+        Alert.alert('Tracker Deactivated', `${tracker.name} is now inactive.`);
       }
     } catch (error) {
       Alert.alert('Error', 'Failed to update tracker status');
@@ -271,32 +151,50 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
   };
 
   const handleToggleSimulation = async () => {
+    if (!tracker) return;
+    
     if (isSimulating) {
-      stopTrackerSimulation(trackerId);
+      // First update UI state
       setIsSimulating(false);
-    } else {
-      // Start the simulation with the current pattern
-      startTrackerSimulation(trackerId, simulationPattern);
-      setIsSimulating(true);
       
-      // Automatically show location history when simulating
+      // Then stop the actual simulation
+      stopTrackerSimulation(trackerId);
+      
+      // After stopping, fit to markers once to reset the view
+      setTimeout(() => {
+        if (mapRef.current && tracker.lastSeen) {
+          zoomToFitMarkers();
+        }
+      }, 500);
+    } else {
+      // Before starting, make sure location history is visible
       if (!showLocationHistory) {
         setShowLocationHistory(true);
       }
       
-      // Make sure the map is properly centered on the current location
+      // First fit to markers to get a good view of the simulation area
       if (mapRef.current && tracker.lastSeen) {
         mapRef.current.animateToRegion({
           latitude: tracker.lastSeen.latitude,
           longitude: tracker.lastSeen.longitude,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
+          // Use a wider view for simulation so user can see movement
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
         }, 500);
       }
+      
+      // Then update UI state
+      setIsSimulating(true);
+      
+      // Short delay before starting simulation to let UI updates complete
+      setTimeout(() => {
+        startTrackerSimulation(trackerId, simulationPattern);
+      }, 300);
     }
   };
 
   const handleChangeSimulationPattern = (pattern: 'random' | 'circle' | 'line') => {
+    if (!tracker) return;
     setSimulationPattern(pattern);
     if (isSimulating) {
       stopTrackerSimulation(trackerId);
@@ -305,6 +203,7 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
   };
 
   const handleSimulateAlert = async () => {
+    if (!tracker) return;
     try {
       await simulateLeftBehindAlert(trackerId, tracker.name);
       Alert.alert('Alert Simulated', 'A "Left Behind" alert has been created for this tracker');
@@ -314,35 +213,67 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
   };
 
   const zoomToFitMarkers = () => {
-    if (mapRef.current && tracker.locationHistory && tracker.locationHistory.length > 0) {
+    console.log('zoomToFitMarkers called');
+    if (!tracker) {
+      console.warn('zoomToFitMarkers: No tracker available');
+      return;
+    }
+    
+    if (!mapRef.current) {
+      console.warn('zoomToFitMarkers: mapRef.current is null');
+      return;
+    }
+    
+    // First try to fit to all points if we have location history
+    if (tracker.locationHistory && tracker.locationHistory.length > 0) {
       const points = [...tracker.locationHistory];
       if (tracker.lastSeen) {
-        points.push(tracker.lastSeen);
+        points.push(tracker.lastSeen); // Include current location
       }
+
+      if (points.length > 0) {
+        console.log(`zoomToFitMarkers: Fitting to ${points.length} coordinates`);
+        try {
+          mapRef.current.fitToCoordinates(
+            points.map(point => ({
+              latitude: Number(point.latitude),
+              longitude: Number(point.longitude),
+            })),
+            {
+              edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
+              animated: true,
+            }
+          );
+        } catch (error) {
+          console.error('Error in fitToCoordinates:', error);
+        }
+      }
+    } 
+    // If no history or fitToCoordinates failed, just animate to current location
+    else if (tracker.lastSeen) {
+      console.log('zoomToFitMarkers: Animating to single coordinate', 
+        tracker.lastSeen.latitude, tracker.lastSeen.longitude);
       
-      // Make sure we have valid coordinates
-      const validPoints = points
-        .filter(point => 
-          point && 
-          !isNaN(parseFloat(point.latitude.toString())) && 
-          !isNaN(parseFloat(point.longitude.toString()))
-        )
-        .map(point => ({
-          latitude: parseFloat(point.latitude.toString()),
-          longitude: parseFloat(point.longitude.toString()),
-        }));
-      
-      if (validPoints.length > 0) {
-        console.log("Fitting map to coordinates:", validPoints);
+      try {
+        mapRef.current.animateToRegion({
+          latitude: Number(tracker.lastSeen.latitude),
+          longitude: Number(tracker.lastSeen.longitude),
+          latitudeDelta: 0.005, // Zoom in a bit closer for a single point
+          longitudeDelta: 0.005,
+        }, 500);
+      } catch (error) {
+        console.error('Error in animateToRegion:', error);
         
-        mapRef.current.fitToCoordinates(
-          validPoints,
-          {
-            edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-            animated: true,
-          }
-        );
+        // As a last resort, try to set the region directly
+        setRegion({
+          latitude: Number(tracker.lastSeen.latitude),
+          longitude: Number(tracker.lastSeen.longitude),
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        });
       }
+    } else {
+      console.warn('zoomToFitMarkers: No lastSeen coordinates available');
     }
   };
 
@@ -356,110 +287,123 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
     });
   };
 
+  // Log before rendering
+  console.log('TrackerDetailScreen - Before Map Container Render. Current Region State:', JSON.stringify(region));
+  if (tracker) {
+    console.log('TrackerDetailScreen - Before Map Container Render. Tracker.lastSeen:', JSON.stringify(tracker.lastSeen, null, 2));
+    if (tracker.lastSeen) {
+      console.log('TrackerDetailScreen - Marker Coords would be:', tracker.lastSeen.latitude, tracker.lastSeen.longitude);
+      console.log('TrackerDetailScreen - Types:', typeof tracker.lastSeen.latitude, typeof tracker.lastSeen.longitude);
+    } else {
+      console.log('TrackerDetailScreen - NO tracker.lastSeen to render marker with.');
+    }
+  } else {
+    console.log('TrackerDetailScreen - NO tracker object AT ALL before map container.');
+  }
+
+  if (!tracker) { // This check handles the case where tracker might be undefined initially
+    return (
+      <SafeAreaView style={styles.container} edges={['right', 'left']}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#007AFF" />
+          <Text>Loading tracker data...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['right', 'left']}>
       <ScrollView>
-        {/* Map Section */}
-        <View style={styles.mapContainer}>
-          {tracker.lastSeen && (
-            <>
-              <MapView
-                ref={mapRef}
-                style={styles.map}
-                initialRegion={region}
-                region={region}
-                provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-                showsUserLocation={false}
-                followsUserLocation={false}
-                customMapStyle={mapCustomStyle}
-                zoomControlEnabled={true}
-                zoomEnabled={true}
-                rotateEnabled={true}
-                onMapReady={() => {
-                  console.log("Map is ready!");
-                  if (mapRef.current && tracker.lastSeen) {
-                    // Force re-render by slightly delaying the animation
-                    setTimeout(() => {
-                      console.log("Animating to marker region", tracker.lastSeen);
-                      try {
-                        // Use animateCamera instead of animateToRegion for better precision
-                        mapRef.current?.animateCamera({
-                          center: {
-                            latitude: parseFloat(tracker.lastSeen.latitude.toString()),
-                            longitude: parseFloat(tracker.lastSeen.longitude.toString()),
-                          },
-                          zoom: 17,
-                        }, { duration: 500 });
-                        
-                        // Force marker update
-                        setMarkerCoordinate({
-                          latitude: parseFloat(tracker.lastSeen.latitude.toString()),
-                          longitude: parseFloat(tracker.lastSeen.longitude.toString()),
-                        });
-                      } catch (error) {
-                        console.error("Error animating map:", error);
-                      }
-                    }, 300);
-                  }
-                }}
-              >
-                {/* Current location marker */}
-                {tracker.lastSeen && (
-                  <>
-                    {/* Main marker */}
+      <View style={styles.mapContainer}>
+      {tracker && tracker.lastSeen ? ( // Ensure tracker and lastSeen are present
+        <>
+          {(() => {
+            console.log('TrackerDetailScreen - RENDERING MapView. Region prop:', JSON.stringify(region));
+            return null;
+          })()}
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            initialRegion={region}
+            // Only control the region prop when not in simulation mode
+            // This prevents the map from resetting its view during simulation
+            region={!isSimulating ? region : undefined}
+            onMapReady={() => {
+              console.log("TrackerDetailScreen - Map is READY!");
+              // Force a fit to marker on map ready
+              setTimeout(() => {
+                if (mapRef.current && tracker.lastSeen) {
+                  mapRef.current.animateToRegion({
+                    latitude: tracker.lastSeen.latitude,
+                    longitude: tracker.lastSeen.longitude,
+                    latitudeDelta: 0.005,
+                    longitudeDelta: 0.005,
+                  }, 500);
+                }
+              }, 500);
+            }}
+            mapPadding={{top: 0, right: 0, bottom: 0, left: 0}}
+            // Don't force re-renders during simulation by changing the key
+            key={isSimulating ? `map-fixed-${trackerId}` : `map-${trackerId}-${tracker.lastSeen.timestamp}`}
+            // Allow user to pan and zoom during simulation
+            scrollEnabled={true}
+            zoomEnabled={true}
+            rotateEnabled={true}
+          >
+            {(() => {
+              console.log(`TrackerDetailScreen - RENDERING Marker for ${tracker.name}. Coords: Lng ${tracker.lastSeen.longitude}, Lat ${tracker.lastSeen.latitude}`);
+              return null;
+            })()}
+            
+            {/* ORIGINAL MARKER WITH TRACKER DATA - MAIN MARKER */}
+            <Marker
+              // Don't change the key during simulation to prevent marker redraws
+              key={isSimulating ? `tracker-${trackerId}` : `tracker-${trackerId}-${tracker.lastSeen.timestamp}`}
+              coordinate={{
+                latitude: Number(tracker.lastSeen.latitude), 
+                longitude: Number(tracker.lastSeen.longitude),
+              }}
+              title={tracker.name}
+              description={`Last seen: ${formatTimestamp(tracker.lastSeen.timestamp)}`}
+              pinColor={tracker.type === 'physical' ? '#007AFF' : '#FF9500'}
+              zIndex={5}
+              // If Android has issues, try enabling this
+              // tracksViewChanges={false}
+            />
+
+            {showLocationHistory && tracker.locationHistory && tracker.locationHistory.length > 1 && (
+              <>
+                <Polyline
+                  // Use a static key during simulation to prevent complete redraws
+                  key={isSimulating ? `polyline-${trackerId}` : `polyline-${trackerId}-${tracker.locationHistory.length}`}
+                  coordinates={tracker.locationHistory.map(point => ({
+                    latitude: Number(point.latitude),
+                    longitude: Number(point.longitude),
+                  }))}
+                  strokeColor="#007AFF"
+                  strokeWidth={3}
+                />
+                {/* Only show history markers when not simulating to reduce visual noise and improve performance */}
+                {!isSimulating && tracker.locationHistory.map((point, index) => (
+                  (index > 0 && index < tracker.locationHistory.length - 1 && index % 3 === 0) && (
                     <Marker
-                      key={`current-${tracker.id}-${Date.now()}`} 
-                      identifier={tracker.id}
+                      key={`history-${tracker.id}-${point.timestamp}-${index}`}
                       coordinate={{
-                        latitude: parseFloat(tracker.lastSeen.latitude.toString()),
-                        longitude: parseFloat(tracker.lastSeen.longitude.toString()),
+                        latitude: Number(point.latitude),
+                        longitude: Number(point.longitude),
                       }}
-                      title={tracker.name}
-                      description={`Last seen: ${formatTimestamp(tracker.lastSeen.timestamp)}`}
-                      pinColor={tracker.type === 'physical' ? '#007AFF' : '#FF9500'}
-                      tracksViewChanges={true}
+                      title={`Location History`}
+                      description={`${formatTimestamp(point.timestamp)}`}
+                      pinColor="gray"
+                      opacity={0.7}
                     />
-                  </>
-                )}
-                
-                {/* History polyline and markers */}
-                {showLocationHistory && tracker.locationHistory && tracker.locationHistory.length > 1 && (
-                  <>
-                    <Polyline
-                      coordinates={tracker.locationHistory.map(point => ({
-                        latitude: parseFloat(point.latitude.toString()),
-                        longitude: parseFloat(point.longitude.toString()),
-                      }))}
-                      strokeColor="#007AFF"
-                      strokeWidth={5}
-                    />
-                    
-                    {tracker.locationHistory.map((point, index) => (
-                      ((index > 0 && index < tracker.locationHistory.length - 1) || index % 5 === 0) && (
-                        <Marker
-                          key={`history-${index}`}
-                          coordinate={{
-                            latitude: parseFloat(point.latitude.toString()),
-                            longitude: parseFloat(point.longitude.toString()),
-                          }}
-                          title={`Location History`}
-                          description={`${formatTimestamp(point.timestamp)}`}
-                          pinColor="gray"
-                          opacity={0.7}
-                          tracksViewChanges={true}
-                        />
-                      )
-                    ))}
-                  </>
-                )}
+                  )
+                ))}
+              </>
+            )}
               </MapView>
-              
-              <View style={styles.debugOverlay}>
-                <Text style={styles.debugText}>
-                  Location: {markerCoordinate.latitude.toFixed(6)}, {markerCoordinate.longitude.toFixed(6)}
-                </Text>
-              </View>
-              
+
               <View style={styles.mapControls}>
                 <TouchableOpacity
                   style={styles.mapControlButton}
@@ -474,21 +418,31 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                     {showLocationHistory ? 'Hide History' : 'Show History'}
                   </Text>
                 </TouchableOpacity>
-                
-                {showLocationHistory && tracker.locationHistory && tracker.locationHistory.length > 1 && (
+
+                {((showLocationHistory && tracker.locationHistory && tracker.locationHistory.length > 0) || tracker.lastSeen) && (
                   <TouchableOpacity
                     style={styles.mapControlButton}
                     onPress={zoomToFitMarkers}
                   >
                     <Ionicons name="expand-outline" size={24} color="#007AFF" />
-                    <Text style={styles.mapControlText}>Fit All Points</Text>
+                    <Text style={styles.mapControlText}>Fit View</Text>
                   </TouchableOpacity>
                 )}
               </View>
             </>
+          ) : (
+            <View style={styles.centeredMessage}>
+              {(() => {
+                console.log('TrackerDetailScreen - NOT rendering MapView because tracker or tracker.lastSeen is missing.');
+                return null;
+              })()}              <Ionicons name="map-outline" size={48} color="#ccc" />
+              <Text style={styles.centeredMessageText}>
+                {tracker ? 'Location data not yet available.' : 'Tracker data loading...'}
+              </Text>
+            </View>
           )}
         </View>
-        
+
         {/* Tracker Info Section */}
         <View style={styles.infoSection}>
           <View style={styles.sectionHeader}>
@@ -505,7 +459,6 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                 {tracker.type === 'physical' ? 'Physical' : 'Virtual'} Tracker
               </Text>
             </View>
-            
             <View style={styles.trackerStatus}>
               <View style={[
                 styles.statusIndicator,
@@ -516,7 +469,7 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.trackerDetailsContainer}>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Last Seen:</Text>
@@ -526,7 +479,7 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                   : 'Unknown'}
               </Text>
             </View>
-            
+
             {tracker.type === 'physical' && (
               <>
                 <View style={styles.detailRow}>
@@ -536,30 +489,30 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                     {
                       color: tracker.batteryLevel && tracker.batteryLevel > 20
                         ? '#4CAF50'
-                        : '#F44336'
+                        : tracker.batteryLevel // Handle case where batteryLevel might be 0 or null
+                        ? '#F44336'
+                        : '#555' // Default color if unknown
                     }
                   ]}>
-                    {tracker.batteryLevel ? `${tracker.batteryLevel}%` : 'Unknown'}
+                    {tracker.batteryLevel !== undefined && tracker.batteryLevel !== null ? `${tracker.batteryLevel}%` : 'Unknown'}
                   </Text>
                 </View>
-                
                 <View style={styles.detailRow}>
                   <Text style={styles.detailLabel}>Connection:</Text>
                   <Text style={styles.detailValue}>
                     {tracker.connectionStatus || 'Unknown'}
                   </Text>
                 </View>
-                
                 {tracker.bleId && (
                   <View style={styles.detailRow}>
                     <Text style={styles.detailLabel}>Device ID:</Text>
-                    <Text style={styles.detailValue}>{tracker.bleId}</Text>
+                    <Text style={[styles.detailValue, styles.deviceIdText]}>{tracker.bleId}</Text>
                   </View>
                 )}
               </>
             )}
           </View>
-          
+
           <View style={styles.switchRow}>
             <Text style={styles.switchLabel}>Active</Text>
             <Switch
@@ -571,65 +524,43 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
             />
           </View>
         </View>
-        
+
         {/* Simulation Controls (Virtual Trackers only) */}
         {tracker.type === 'virtual' && (
           <View style={styles.simulationSection}>
             <Text style={styles.sectionTitle}>Simulation Controls</Text>
-            
             <View style={styles.simulationPatterns}>
-              <TouchableOpacity
-                style={[
-                  styles.patternButton,
-                  simulationPattern === 'random' && styles.patternButtonActive
-                ]}
-                onPress={() => handleChangeSimulationPattern('random')}
-                disabled={loading}
-              >
-                <Ionicons name="shuffle" size={20} color={simulationPattern === 'random' ? '#fff' : '#007AFF'} />
-                <Text style={[
-                  styles.patternButtonText,
-                  simulationPattern === 'random' && styles.patternButtonTextActive
-                ]}>
-                  Random
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.patternButton,
-                  simulationPattern === 'circle' && styles.patternButtonActive
-                ]}
-                onPress={() => handleChangeSimulationPattern('circle')}
-                disabled={loading}
-              >
-                <Ionicons name="ellipse-outline" size={20} color={simulationPattern === 'circle' ? '#fff' : '#007AFF'} />
-                <Text style={[
-                  styles.patternButtonText,
-                  simulationPattern === 'circle' && styles.patternButtonTextActive
-                ]}>
-                  Circle
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.patternButton,
-                  simulationPattern === 'line' && styles.patternButtonActive
-                ]}
-                onPress={() => handleChangeSimulationPattern('line')}
-                disabled={loading}
-              >
-                <Ionicons name="trending-up-outline" size={20} color={simulationPattern === 'line' ? '#fff' : '#007AFF'} />
-                <Text style={[
-                  styles.patternButtonText,
-                  simulationPattern === 'line' && styles.patternButtonTextActive
-                ]}>
-                  Line
-                </Text>
-              </TouchableOpacity>
+              {/* Pattern Buttons */}
+              {(['random', 'circle', 'line'] as const).map((pattern) => (
+                <TouchableOpacity
+                  key={pattern}
+                  style={[
+                    styles.patternButton,
+                    simulationPattern === pattern && styles.patternButtonActive,
+                  ]}
+                  onPress={() => handleChangeSimulationPattern(pattern)}
+                  disabled={loading}
+                >
+                  <Ionicons
+                    name={
+                      pattern === 'random' ? 'shuffle' :
+                      pattern === 'circle' ? 'ellipse-outline' :
+                      'trending-up-outline'
+                    }
+                    size={20}
+                    color={simulationPattern === pattern ? '#fff' : '#007AFF'}
+                  />
+                  <Text
+                    style={[
+                      styles.patternButtonText,
+                      simulationPattern === pattern && styles.patternButtonTextActive,
+                    ]}
+                  >
+                    {pattern.charAt(0).toUpperCase() + pattern.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
             </View>
-            
             <TouchableOpacity
               style={[
                 styles.simulationButton,
@@ -647,7 +578,6 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                 {isSimulating ? 'Stop Simulation' : 'Start Simulation'}
               </Text>
             </TouchableOpacity>
-            
             <TouchableOpacity
               style={styles.alertButton}
               onPress={handleSimulateAlert}
@@ -674,60 +604,70 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#f9f9f9', // Match screen background
+    padding: 20,
   },
   mapContainer: {
-    height: 300,
+    height: Dimensions.get('window').height * 0.4, // Increased from 0.35 to 0.4
     width: '100%',
     marginBottom: 16,
-    position: 'relative',
+    backgroundColor: 'lightgreen', // Debug color
+    borderWidth: 2,
+    borderColor: 'red',
+    overflow: 'hidden', // Ensure content doesn't spill out
   },
   map: {
     ...StyleSheet.absoluteFillObject,
+    zIndex: 1, // Ensure map has a defined z-index
+    width: '100%',
+    height: '100%',
   },
-  debugOverlay: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    padding: 5,
-    borderRadius: 5,
-    zIndex: 999,
+  centeredMessage: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
   },
-  debugText: {
-    color: 'white',
-    fontSize: 10,
+  centeredMessageText: {
+    marginTop: 8,
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
   },
   mapControls: {
     position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
+    bottom: 10, // Adjusted for better spacing
+    left: 10,
+    right: 10,
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    zIndex: 999,
+    justifyContent: 'space-evenly', // Evenly space buttons
+    zIndex: 1, // Ensure controls are above the map
   },
   mapControlButton: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
-    shadowRadius: 2,
+    shadowRadius: 3,
     elevation: 5,
+    marginHorizontal: 5, // Add some margin between buttons
   },
   mapControlText: {
-    marginLeft: 4,
-    fontSize: 14,
+    marginLeft: 6,
+    fontSize: 13, // Slightly smaller text
     color: '#007AFF',
     fontWeight: '500',
   },
   infoSection: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    margin: 16,
+    marginHorizontal: 16,
+    marginBottom: 16, // Add margin at the bottom
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -752,7 +692,7 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
-    marginLeft: 4,
+    marginLeft: 6,
   },
   trackerStatus: {
     flexDirection: 'row',
@@ -775,22 +715,33 @@ const styles = StyleSheet.create({
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    alignItems: 'center', // Align items vertically
+    marginBottom: 10, // Increased spacing
+    paddingVertical: 4, // Add some vertical padding
   },
   detailLabel: {
-    fontSize: 16,
+    fontSize: 15, // Slightly adjusted
     color: '#555',
+    flex: 1, // Allow label to take space
   },
   detailValue: {
-    fontSize: 16,
+    fontSize: 15, // Slightly adjusted
     fontWeight: '500',
     color: '#333',
+    flexShrink: 1, // Allow value to shrink if needed
+    textAlign: 'right', // Align value to the right
+  },
+  deviceIdText: {
+    fontSize: 13, // Smaller for potentially long IDs
+    color: '#777',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', // Monospace for IDs
   },
   switchRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingTop: 12,
+    marginTop: 8, // Add margin top
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
   },
@@ -802,8 +753,8 @@ const styles = StyleSheet.create({
   simulationSection: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    margin: 16,
-    marginTop: 0,
+    margin: 16, // Consistent margin
+    marginTop: 0, // Remove top margin if it's directly after infoSection
     padding: 16,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
@@ -816,30 +767,33 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#333',
     marginBottom: 16,
+    textAlign: 'center', // Center title
   },
   simulationPatterns: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 16,
+    justifyContent: 'space-around', // Better distribution
+    marginBottom: 20, // Increased spacing
   },
   patternButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 8,
-    borderWidth: 1,
+    paddingVertical: 10, // Increased padding
+    paddingHorizontal: 8, // Adjust horizontal for icon and text
+    borderWidth: 1.5, // Slightly thicker border
     borderColor: '#007AFF',
     borderRadius: 20,
-    flex: 1,
-    marginHorizontal: 4,
+    flex: 1, // Allow buttons to share space
+    marginHorizontal: 4, // Space between buttons
   },
   patternButtonActive: {
     backgroundColor: '#007AFF',
   },
   patternButtonText: {
-    fontSize: 14,
+    fontSize: 13, // Adjusted size
     color: '#007AFF',
-    marginLeft: 4,
+    marginLeft: 6, // Space from icon
+    fontWeight: '500',
   },
   patternButtonTextActive: {
     color: '#fff',
@@ -848,23 +802,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
+    paddingVertical: 14, // Larger touch area
     borderRadius: 8,
     marginBottom: 12,
   },
   startButton: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#4CAF50', // Green for start
   },
   stopButton: {
-    backgroundColor: '#F44336',
+    backgroundColor: '#F44336', // Red for stop
   },
   alertButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
+    paddingVertical: 14,
     borderRadius: 8,
-    backgroundColor: '#FF9500',
+    backgroundColor: '#FF9500', // Orange for alert simulation
   },
   simulationButtonText: {
     color: '#fff',
