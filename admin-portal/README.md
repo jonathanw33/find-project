@@ -1,98 +1,138 @@
 # FIND System - Admin Portal
 
-This directory will contain the web-based administration portal for the FIND system. The admin portal will be developed in Phase 4 of the project.
+This is the administrative web portal for the FIND tracking system. It allows administrators to monitor trackers, manage lost device recovery, and oversee the system.
 
-## Planned Features
+## Features
 
-- User account management
-- Tracker monitoring and administration
-- Lost item recovery logistics
-- System analytics and reporting
-- Configuration management
+- **Dashboard**: View system overview with key metrics
+- **Tracker Management**: Monitor all trackers in the system
+- **User Management**: View user accounts and their trackers
+- **Recovery Management**: Handle logistics for returning lost trackers to users
+- **Administrative Functions**: Settings and configuration
 
-## Technology Stack
+## Tech Stack
 
-- React.js for frontend
-- Supabase for backend services
+- Next.js for the frontend framework
+- React for UI components
+- Supabase for backend services and authentication
 - Tailwind CSS for styling
-- Next.js for server-side rendering
-- Chart.js for analytics visualizations
+- Lucide React for icons
+- TypeScript for type safety
 
-## Development Setup (Future)
+## Getting Started
 
-1. Install Node.js (v14 or later)
-2. Clone this repository
-3. Navigate to the admin-portal directory
-4. Run `npm install` to install dependencies
-5. Run `npm run dev` to start the development server
+### Prerequisites
 
-## Project Structure (Planned)
+- Node.js (v14 or later)
+- npm or yarn
+- Supabase account and project set up
+
+### Installation
+
+1. Clone the repository
+   ```
+   git clone https://github.com/your-username/find-project.git
+   cd find-project/admin-portal
+   ```
+
+2. Install dependencies
+   ```
+   npm install
+   # or
+   yarn
+   ```
+
+3. Set up environment variables
+   ```
+   cp .env.local.example .env.local
+   ```
+   Then edit `.env.local` to add your Supabase URL and anon key.
+
+4. Start the development server
+   ```
+   npm run dev
+   # or
+   yarn dev
+   ```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser
+
+## Deployment
+
+The admin portal can be deployed to Vercel, Netlify, or any other hosting platform that supports Next.js.
+
+```
+npm run build
+npm run start
+```
+
+## Project Structure
 
 ```
 admin-portal/
 ├── public/               # Static files
 ├── src/
 │   ├── components/       # Reusable UI components
-│   ├── contexts/         # React contexts
+│   ├── contexts/         # React contexts (Auth, etc.)
 │   ├── hooks/            # Custom React hooks
-│   ├── layouts/          # Page layouts
-│   ├── pages/            # Page components
+│   ├── layouts/          # Page layouts (Admin layout)
+│   ├── pages/            # Page components and API routes
 │   ├── services/         # API and service integrations
 │   ├── styles/           # CSS and style files
 │   ├── types/            # TypeScript type definitions
 │   └── utils/            # Utility functions
-├── .env.example          # Example environment variables
+├── .env.local.example    # Example environment variables
 ├── next.config.js        # Next.js configuration
 ├── package.json          # Node.js dependencies
 └── tsconfig.json         # TypeScript configuration
 ```
 
-## Screens and Features
-
-### Authentication
-- Login screen
-- Password reset
-- Two-factor authentication
+## Main Features
 
 ### Dashboard
-- System overview
-- Active trackers count
-- Recent alerts
-- Recovery requests
 
-### User Management
-- List of users
-- User details and edit
-- Account creation
-- Permissions management
+The dashboard provides a high-level overview of the system, showing:
+- Total users and trackers
+- Connected vs. disconnected trackers
+- Recent alerts
+- Battery status of trackers
+- Quick links to common actions
 
 ### Tracker Management
-- List of all trackers
-- Tracker details and status
-- Location history
-- Remote commands (alert, factory reset)
+
+Administrators can:
+- View all trackers in the system
+- Filter by status (connected, disconnected, lost)
+- View tracker details (battery, last seen location, connection status)
+- Initiate recovery process for lost trackers
 
 ### Recovery Management
-- Pending recovery requests
-- Request details
-- Logistics coordination
-- Status updates
 
-### Analytics
-- Usage statistics
-- Battery life analytics
-- Lost item patterns
-- System performance
+For lost trackers, administrators can:
+- Create new recovery requests
+- Track shipment status
+- Update shipping information
+- View recovery history
 
-### Settings
-- System configuration
-- Email notifications
-- Integration settings
-- Backup and restore
+## Admin Authentication
 
-## Integration Points
+This portal uses Supabase for authentication. To set up an admin user:
 
-- Mobile app API
-- Supabase backend
-- Logistics partners API
-- Notification services
+1. Create a user in the Supabase authentication system
+2. Add the user to the `admin_users` table with appropriate permissions
+3. The user can then log in to the admin portal
+
+## Integration with Mobile App
+
+The admin portal connects to the same Supabase backend as the mobile app, allowing administrators to:
+- View data from all users' trackers
+- Monitor the overall system health
+- Manage recovery logistics for lost trackers
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
