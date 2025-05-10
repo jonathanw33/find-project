@@ -13,44 +13,17 @@ import {
   setTrackerError 
 } from '../redux/slices/trackerSlice';
 import { RootState } from '../redux/store';
-import { createClient } from '@supabase/supabase-js';
 import * as Location from 'expo-location';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase, trackerService } from '../services/supabase';
 
-// Simple UUID generator that doesn't rely on crypto
-const generateUUID = () => {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 15);
-  return `${timestamp}-${randomStr}`;
-};
+// No longer needed as Supabase will generate UUIDs
+// const generateUUID = () => {
+//   const timestamp = Date.now().toString(36);
+//   const randomStr = Math.random().toString(36).substring(2, 15);
+//   return `${timestamp}-${randomStr}`;
+// };
 
-// Initialize Supabase client
-const supabaseUrl = 'https://hxdurjngbkfnbryzczau.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZHVyam5nYmtmbmJyeXpjemF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMzIwOTIsImV4cCI6MjA2MDYwODA5Mn0.goPuYbHra2eHKSFidqYMiDbJ5KlYF3WLr0KGqSt62Xw';
-
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    storage: AsyncStorage as any,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-  db: {
-    schema: 'public',
-  },
-  global: {
-    fetch: global.fetch,
-    headers: {
-      'X-Client-Info': 'react-native-v2.39.7',
-    }
-  },
-  // Disable realtime subscriptions to avoid WebSocket issues
-  realtime: {
-    params: {
-      eventsPerSecond: 0, // Disable realtime completely
-    },
-  },
-});
+// Using the Supabase client from services/supabase.ts
 
 interface TrackerContextType {
   createVirtualTracker: (name: string, initialLocation?: LocationPoint) => Promise<Tracker>;
@@ -100,37 +73,29 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       dispatch(setTrackerLoading(true));
       console.log("Loading trackers for user:", user?.id || "no user");
       
-      // In a real implementation, fetch from Supabase
-      // For now, we'll simulate with dummy data
-      const dummyTrackers: Tracker[] = [
-        {
-          id: generateUUID(),
-          name: 'Home Keys',
-          type: 'virtual',
-          isActive: true,
-          lastSeen: {
-            latitude: 37.7749,
-            longitude: -122.4194,
-            timestamp: Date.now(),
-          },
-          locationHistory: [],
-        },
-        {
-          id: generateUUID(),
-          name: 'Wallet',
-          type: 'virtual',
-          isActive: true,
-          lastSeen: {
-            latitude: 37.7756,
-            longitude: -122.4198,
-            timestamp: Date.now(),
-          },
-          locationHistory: [],
-        },
-      ];
+      // Fetch trackers from Supabase
+      const trackersData = await trackerService.getTrackers();
       
-      console.log("Setting dummy trackers:", dummyTrackers);
-      dispatch(setTrackers(dummyTrackers));
+      // Transform data to match our redux format
+      const transformedTrackers: Tracker[] = trackersData.map(tracker => ({
+        id: tracker.id,
+        name: tracker.name,
+        type: tracker.type,
+        icon: tracker.icon || undefined,
+        batteryLevel: tracker.battery_level || undefined,
+        isActive: tracker.is_active,
+        lastSeen: tracker.last_seen_latitude && tracker.last_seen_longitude ? {
+          latitude: tracker.last_seen_latitude,
+          longitude: tracker.last_seen_longitude,
+          timestamp: tracker.last_seen_timestamp ? new Date(tracker.last_seen_timestamp).getTime() : Date.now(),
+        } : null,
+        locationHistory: [], // We'll fetch this separately when needed
+        connectionStatus: tracker.connection_status as any || undefined,
+        bleId: tracker.ble_id || undefined,
+      }));
+      
+      console.log("Setting trackers from Supabase:", transformedTrackers);
+      dispatch(setTrackers(transformedTrackers));
     } catch (error) {
       console.error("Error loading trackers:", error);
       dispatch(setTrackerError((error as Error).message));
@@ -153,21 +118,29 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       
       console.log("Tracker location:", location);
       
-      // Generate a unique ID
-      const trackerId = generateUUID();
-      
-      const newTracker: Tracker = {
-        id: trackerId,
+      // Save to Supabase
+      const newTrackerData = await trackerService.createTracker({
         name,
         type: 'virtual',
-        isActive: true,
-        lastSeen: location,
-        locationHistory: [location],
+        last_seen_latitude: location.latitude,
+        last_seen_longitude: location.longitude,
+      });
+      
+      // Transform to our redux format
+      const newTracker: Tracker = {
+        id: newTrackerData.id,
+        name: newTrackerData.name,
+        type: newTrackerData.type,
+        isActive: newTrackerData.is_active,
+        lastSeen: newTrackerData.last_seen_latitude && newTrackerData.last_seen_longitude ? {
+          latitude: newTrackerData.last_seen_latitude,
+          longitude: newTrackerData.last_seen_longitude,
+          timestamp: newTrackerData.last_seen_timestamp ? new Date(newTrackerData.last_seen_timestamp).getTime() : Date.now(),
+        } : null,
+        locationHistory: [],
       };
       
-      console.log("New tracker created:", newTracker);
-      
-      // In a real implementation, save to Supabase
+      console.log("New tracker created in Supabase:", newTracker);
       
       dispatch(addTracker(newTracker));
       return newTracker;
@@ -184,7 +157,16 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       dispatch(setTrackerLoading(true));
       
-      // In a real implementation, update in Supabase
+      // Transform to match Supabase format
+      const supabaseUpdates: any = {};
+      if (updates.name) supabaseUpdates.name = updates.name;
+      if (updates.icon) supabaseUpdates.icon = updates.icon;
+      if (updates.batteryLevel !== undefined) supabaseUpdates.battery_level = updates.batteryLevel;
+      if (updates.isActive !== undefined) supabaseUpdates.is_active = updates.isActive;
+      if (updates.connectionStatus) supabaseUpdates.connection_status = updates.connectionStatus;
+      
+      // Update in Supabase
+      await trackerService.updateTracker(id, supabaseUpdates);
       
       dispatch(updateTracker({ id, updates }));
     } catch (error) {
@@ -199,7 +181,8 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     try {
       dispatch(setTrackerLoading(true));
       
-      // In a real implementation, delete from Supabase
+      // Delete from Supabase
+      await trackerService.deleteTracker(id);
       
       // Stop any ongoing simulation
       stopTrackerSimulation(id);
@@ -219,7 +202,12 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const moveVirtualTracker = async (id: string, location: LocationPoint) => {
     try {
-      // In a real implementation, update in Supabase
+      // Update in Supabase
+      await trackerService.updateTrackerLocation(id, {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: location.accuracy,
+      });
       
       dispatch(updateTrackerLocation({ id, location }));
     } catch (error) {

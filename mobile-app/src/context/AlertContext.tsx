@@ -12,43 +12,9 @@ import {
   setAlertError
 } from '../redux/slices/alertSlice';
 import { RootState } from '../redux/store';
-import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase, alertService } from '../services/supabase';
 
-// Simple UUID generator that doesn't rely on crypto
-const generateUUID = () => {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 15);
-  return `${timestamp}-${randomStr}`;
-};
-
-// Initialize Supabase client
-const supabaseUrl = 'https://hxdurjngbkfnbryzczau.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZHVyam5nYmtmbmJyeXpjemF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMzIwOTIsImV4cCI6MjA2MDYwODA5Mn0.goPuYbHra2eHKSFidqYMiDbJ5KlYF3WLr0KGqSt62Xw';
-
-const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    storage: AsyncStorage as any,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-  db: {
-    schema: 'public',
-  },
-  global: {
-    fetch: global.fetch,
-    headers: {
-      'X-Client-Info': 'react-native-v2.39.7',
-    }
-  },
-  // Disable realtime subscriptions to avoid WebSocket issues
-  realtime: {
-    params: {
-      eventsPerSecond: 0, // Disable realtime completely
-    },
-  },
-});
+// Using the Supabase client from services/supabase.ts
 
 interface AlertContextType {
   createAlert: (alert: Omit<Alert, 'id' | 'timestamp' | 'isRead' | 'isActive'>) => Promise<Alert>;
@@ -91,9 +57,24 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       dispatch(setAlertLoading(true));
       
-      // In a real implementation, fetch from Supabase
-      // For now, we'll use empty alerts
-      dispatch(setAlerts([]));
+      // Fetch alerts from Supabase
+      const alertsData = await alertService.getAlerts();
+      
+      // Transform to match our Redux structure
+      const transformedAlerts: Alert[] = alertsData.map(alert => ({
+        id: alert.id,
+        trackerId: alert.tracker_id,
+        type: alert.type,
+        title: alert.title,
+        message: alert.message,
+        icon: alert.icon || undefined,
+        isRead: alert.is_read,
+        isActive: alert.is_active,
+        data: alert.data || undefined,
+        timestamp: new Date(alert.timestamp).getTime(),
+      }));
+      
+      dispatch(setAlerts(transformedAlerts));
     } catch (error) {
       dispatch(setAlertError((error as Error).message));
     } finally {
@@ -107,15 +88,24 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       dispatch(setAlertLoading(true));
       
+      // Create alert in Supabase
+      const alertId = await alertService.createAlert({
+        tracker_id: alertData.trackerId,
+        type: alertData.type as any,
+        title: alertData.title,
+        message: alertData.message,
+        icon: alertData.icon,
+        data: alertData.data,
+      });
+      
+      // Create the alert object for our Redux store
       const newAlert: Alert = {
         ...alertData,
-        id: generateUUID(),
+        id: alertId as string,
         timestamp: Date.now(),
         isRead: false,
         isActive: true,
       };
-      
-      // In a real implementation, save to Supabase
       
       dispatch(addAlert(newAlert));
       return newAlert;
@@ -146,7 +136,8 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       dispatch(setAlertLoading(true));
       
-      // In a real implementation, delete from Supabase
+      // Delete from Supabase
+      await alertService.deleteAlert(id);
       
       dispatch(removeAlert(id));
     } catch (error) {
@@ -159,7 +150,8 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const markAsRead = async (id: string) => {
     try {
-      // In a real implementation, update in Supabase
+      // Update in Supabase
+      await alertService.markAlertAsRead(id);
       
       dispatch(markAlertAsRead(id));
     } catch (error) {
@@ -170,7 +162,8 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const markAllAsRead = async () => {
     try {
-      // In a real implementation, update in Supabase
+      // Update in Supabase
+      await alertService.markAllAlertsAsRead();
       
       dispatch(markAllAlertsAsRead());
     } catch (error) {

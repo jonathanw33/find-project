@@ -12,6 +12,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { Tracker, setSelectedTracker } from '../../redux/slices/trackerSlice';
 import { useTracker } from '../../context/TrackerContext';
+import { useSupabaseTrackers } from '../../hooks/useSupabaseTrackers';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MainStackParamList } from '../../navigation';
@@ -24,18 +25,27 @@ const TrackerListScreen: React.FC = () => {
   const { trackers, loading, error } = useSelector((state: RootState) => state.trackers);
   const dispatch = useDispatch();
   const navigation = useNavigation<NavigationProp>();
-  const { deleteTracker } = useTracker();
+  const { deleteTracker: contextDeleteTracker } = useTracker();
+  const { fetchTrackers, deleteTracker: supabaseDeleteTracker } = useSupabaseTrackers();
   const [refreshing, setRefreshing] = useState(false);
 
   const trackersArray = Object.values(trackers);
 
+  useEffect(() => {
+    // Load trackers when the component mounts
+    fetchTrackers();
+  }, []);
+
   const handleRefresh = async () => {
     setRefreshing(true);
-    // In a real app, you would reload trackers from the backend here
-    // For now, we'll just simulate a delay
-    setTimeout(() => {
+    try {
+      // Reload trackers from Supabase
+      await fetchTrackers();
+    } catch (error) {
+      console.error('Error refreshing trackers:', error);
+    } finally {
       setRefreshing(false);
-    }, 1000);
+    }
   };
 
   const handleSelectTracker = (tracker: Tracker) => {
@@ -58,7 +68,7 @@ const TrackerListScreen: React.FC = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteTracker(tracker.id);
+              await supabaseDeleteTracker(tracker.id);
             } catch (error) {
               Alert.alert('Error', 'Failed to delete tracker');
             }

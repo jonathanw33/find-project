@@ -82,6 +82,8 @@ export interface Database {
           email: string
           name: string | null
           avatar_url: string | null
+          phone: string | null
+          address: string | null
           created_at: string
           updated_at: string
         }
@@ -90,6 +92,8 @@ export interface Database {
           email: string
           name?: string | null
           avatar_url?: string | null
+          phone?: string | null
+          address?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -98,6 +102,8 @@ export interface Database {
           email?: string
           name?: string | null
           avatar_url?: string | null
+          phone?: string | null
+          address?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -232,6 +238,9 @@ export interface Database {
           tracking_number: string | null
           shipping_address: string | null
           notes: string | null
+          carrier: string | null
+          delivery_latitude: number | null
+          delivery_longitude: number | null
         }
         Insert: {
           id?: string
@@ -243,6 +252,9 @@ export interface Database {
           tracking_number?: string | null
           shipping_address?: string | null
           notes?: string | null
+          carrier?: string | null
+          delivery_latitude?: number | null
+          delivery_longitude?: number | null
         }
         Update: {
           id?: string
@@ -254,6 +266,9 @@ export interface Database {
           tracking_number?: string | null
           shipping_address?: string | null
           notes?: string | null
+          carrier?: string | null
+          delivery_latitude?: number | null
+          delivery_longitude?: number | null
         }
       }
     }
@@ -296,6 +311,7 @@ export interface TrackerWithUserInfo extends Database['public']['Tables']['track
   user_email: string;
   user_name: string;
   is_lost?: boolean; // Derived field based on connection status and last seen timestamp
+  recovery_status?: 'lost' | 'normal' | 'recovering'; // Derived field from recovery tracking
 }
 
 export interface UserWithTrackersCount extends Database['public']['Tables']['profiles']['Row'] {
@@ -304,9 +320,15 @@ export interface UserWithTrackersCount extends Database['public']['Tables']['pro
 }
 
 export interface LogisticsRequestWithDetails extends Database['public']['Tables']['logistics_requests']['Row'] {
+  // Additional fields derived from relations
   tracker_name: string;
   user_email: string;
   user_name: string;
+  user_phone?: string;
+  user_address?: string;
+  // Nested relations from the query
+  trackers?: Database['public']['Tables']['trackers']['Row'] | null;
+  profiles?: Database['public']['Tables']['profiles']['Row'] | null;
 }
 
 export interface LogisticsApiResponse {

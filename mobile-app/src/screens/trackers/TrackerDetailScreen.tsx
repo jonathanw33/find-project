@@ -15,6 +15,7 @@ import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
 // import { updateTracker } from '../../redux/slices/trackerSlice'; // Not used directly, dispatch is used with actions
 import { useTracker } from '../../context/TrackerContext';
+import { useSupabaseTrackers } from '../../hooks/useSupabaseTrackers';
 import { useAlert } from '../../context/AlertContext';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -22,6 +23,8 @@ import { MainStackParamList } from '../../navigation';
 import { Ionicons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, Region } from 'react-native-maps'; // Added Region type
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { markTrackerAsLost } from '../../utils/markTrackerLost';
+
 
 type TrackerDetailScreenProps = {
   route: RouteProp<MainStackParamList, 'TrackerDetail'>;
@@ -47,13 +50,21 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
   console.log('Tracker from Redux:', JSON.stringify(tracker, null, 2));
   
   const dispatch = useDispatch(); // Kept if other dispatches are needed later
-  const { updateTrackerDetails, startTrackerSimulation, stopTrackerSimulation } = useTracker();
+  const { startTrackerSimulation, stopTrackerSimulation } = useTracker();
+  const { updateTrackerDetails: supabaseUpdateTrackerDetails, updateLocation, fetchTrackerHistory } = useSupabaseTrackers();
   const { simulateLeftBehindAlert } = useAlert();
   const [loading, setLoading] = useState(false);
   const [showLocationHistory, setShowLocationHistory] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationPattern, setSimulationPattern] = useState<'random' | 'circle' | 'line'>('random');
   const mapRef = useRef<MapView>(null);
+
+  // Load location history when component mounts
+  useEffect(() => {
+    if (tracker) {
+      fetchTrackerHistory(tracker.id);
+    }
+  }, [tracker?.id]);
 
   const [region, setRegion] = useState<Region>(() => {
     if (tracker?.lastSeen) {
@@ -137,7 +148,7 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
     if (!tracker) return;
     try {
       setLoading(true);
-      await updateTrackerDetails(trackerId, { isActive: !tracker.isActive });
+      await supabaseUpdateTrackerDetails(trackerId, { isActive: !tracker.isActive });
       if (!tracker.isActive) { // Note: tracker.isActive here is the value *before* the update
         Alert.alert('Tracker Activated', `${tracker.name} is now active and will send location updates.`);
       } else {
@@ -588,6 +599,16 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                 Simulate "Left Behind" Alert
               </Text>
             </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.lostButton}
+              onPress={() => markTrackerAsLost(trackerId)}
+              disabled={loading}
+            >
+              <Ionicons name="alert-circle" size={24} color="#fff" />
+              <Text style={styles.simulationButtonText}>
+                Mark as Lost
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -819,6 +840,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
     backgroundColor: '#FF9500', // Orange for alert simulation
+  },
+  lostButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: '#D32F2F', // Red for marking as lost
+    marginTop: 12,
   },
   simulationButtonText: {
     color: '#fff',

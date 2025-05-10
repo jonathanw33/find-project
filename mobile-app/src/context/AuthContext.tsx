@@ -13,7 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { mockUserData } from '../services/mockData';
 
 // Flag to use mock data instead of actual Supabase calls
-const USE_MOCK_DATA = false; // Set to false when Supabase connections work
+const USE_MOCK_DATA = false; // Using real Supabase connections
 
 // Initialize Supabase client
 const supabaseUrl = 'https://hxdurjngbkfnbryzczau.supabase.co';
@@ -78,15 +78,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: session.user.user_metadata?.name,
           avatarUrl: session.user.user_metadata?.avatar_url,
         }));
-      } else {
-        console.log("No session found, setting mock user");
-        // For demo purposes, set a mock user anyway
+      } else if (USE_MOCK_DATA) {
+        console.log("No session found, using mock user");
+        // For demo purposes, only set a mock user if USE_MOCK_DATA is true
         dispatch(setUser({
           id: 'mock-user-id',
           email: 'demo@example.com',
           name: 'Demo User',
           avatarUrl: null,
         }));
+      } else {
+        // No session and not using mock data, so ensure user is logged out
+        dispatch(logoutAction());
       }
       dispatch(setLoading(false));
     });

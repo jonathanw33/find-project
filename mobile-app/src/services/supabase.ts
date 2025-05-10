@@ -24,9 +24,17 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 export const trackerService = {
   // Get all trackers for current user
   async getTrackers() {
+    // Get the current user ID
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('User not authenticated. Please log in.');
+    }
+    
     const { data, error } = await supabase
       .from('trackers')
       .select('*')
+      .eq('user_id', user.id)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
@@ -54,9 +62,20 @@ export const trackerService = {
     last_seen_longitude?: number;
     ble_id?: string;
   }) {
+    // Get the current user ID
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('User not authenticated. Please log in.');
+    }
+    
+    // Add user_id to the tracker object
     const { data, error } = await supabase
       .from('trackers')
-      .insert(tracker)
+      .insert({
+        ...tracker,
+        user_id: user.id
+      })
       .select()
       .single();
     
@@ -132,9 +151,17 @@ export const trackerService = {
 export const alertService = {
   // Get all alerts for current user
   async getAlerts() {
+    // Get the current user ID
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      throw new Error('User not authenticated. Please log in.');
+    }
+    
     const { data, error } = await supabase
       .from('alerts')
       .select('*')
+      .eq('user_id', user.id)
       .order('timestamp', { ascending: false });
     
     if (error) throw error;

@@ -15,12 +15,14 @@ import {
   Filter,
   ArrowUpDown,
   X,
-  ArrowUpRight
+  ArrowUpRight,
+  RefreshCw
 } from 'lucide-react';
 import AdminLayout from '@/layouts/AdminLayout';
 import { supabase } from '@/utils/supabase';
 import { TrackerWithUserInfo } from '@/types/supabase';
 import { formatDistanceToNow } from 'date-fns';
+import { getTrackerDisplayStatus } from '@/utils/trackerRecoveryStatus';
 
 const Trackers: React.FC = () => {
   const [trackers, setTrackers] = useState<TrackerWithUserInfo[]>([]);
@@ -58,11 +60,22 @@ const Trackers: React.FC = () => {
         const isDisconnected = tracker.connection_status === 'disconnected';
         const isLostTime = lastSeen ? (Date.now() - lastSeen.getTime() > 24 * 60 * 60 * 1000) : false; // 24 hours
         
+        // Check recovery status from localStorage
+        const recoveryDisplayStatus = getTrackerDisplayStatus(tracker.id);
+        
+        // A tracker is lost if:
+        // 1. It's marked as lost in recovery system OR
+        // 2. It's disconnected for a long time and no recovery is in progress
+        const isLost = recoveryDisplayStatus.status === 'lost' || 
+                       (recoveryDisplayStatus.status === 'normal' && (isDisconnected || isLostTime));
+        
         return {
           ...tracker,
           user_email: tracker.profiles?.email || 'Unknown',
           user_name: tracker.profiles?.name || 'Unknown',
-          is_lost: isDisconnected || isLostTime
+          is_lost: isLost,
+          // Add recovery status to the tracker object
+          recovery_status: recoveryDisplayStatus.status
         };
       });
 
@@ -93,11 +106,13 @@ const Trackers: React.FC = () => {
     // Apply status filter
     if (filterStatus !== 'all') {
       if (filterStatus === 'lost') {
-        result = result.filter(tracker => tracker.is_lost);
+        result = result.filter(tracker => getTrackerDisplayStatus(tracker.id).status === 'lost');
+      } else if (filterStatus === 'recovering') {
+        result = result.filter(tracker => getTrackerDisplayStatus(tracker.id).status === 'recovering');
       } else if (filterStatus === 'connected') {
-        result = result.filter(tracker => tracker.connection_status === 'connected');
+        result = result.filter(tracker => tracker.connection_status === 'connected' && getTrackerDisplayStatus(tracker.id).status === 'normal');
       } else if (filterStatus === 'disconnected') {
-        result = result.filter(tracker => tracker.connection_status === 'disconnected');
+        result = result.filter(tracker => tracker.connection_status === 'disconnected' && getTrackerDisplayStatus(tracker.id).status === 'normal');
       } else if (filterStatus === 'low_battery') {
         result = result.filter(tracker => tracker.battery_level !== null && tracker.battery_level < 20);
       }
@@ -141,10 +156,17 @@ const Trackers: React.FC = () => {
 
   // Function to get the status badge class
   const getStatusBadge = (tracker: TrackerWithUserInfo) => {
-    if (tracker.is_lost) {
+    // Get recovery status from our tracking system
+    const recoveryStatus = getTrackerDisplayStatus(tracker.id);
+    
+    // Priority: recovery status > connection status
+    if (recoveryStatus.status === 'lost') {
       return 'badge badge-danger';
     }
-    if (tracker.connection_status === 'connected') {
+    if (recoveryStatus.status === 'recovering') {
+      return 'badge badge-warning';
+    }
+    if (recoveryStatus.status === 'normal' && tracker.connection_status === 'connected') {
       return 'badge badge-success';
     }
     if (tracker.connection_status === 'disconnected') {
@@ -158,10 +180,17 @@ const Trackers: React.FC = () => {
 
   // Function to get the connection status label
   const getConnectionStatus = (tracker: TrackerWithUserInfo) => {
-    if (tracker.is_lost) {
+    // Get recovery status from our tracking system
+    const recoveryStatus = getTrackerDisplayStatus(tracker.id);
+    
+    // Priority: recovery status > connection status
+    if (recoveryStatus.status === 'lost') {
       return 'Lost';
     }
-    if (tracker.connection_status === 'connected') {
+    if (recoveryStatus.status === 'recovering') {
+      return 'Recovering';
+    }
+    if (recoveryStatus.status === 'normal' && tracker.connection_status === 'connected') {
       return 'Connected';
     }
     if (tracker.connection_status === 'disconnected') {
@@ -170,7 +199,7 @@ const Trackers: React.FC = () => {
     if (tracker.connection_status === 'connecting') {
       return 'Connecting';
     }
-    return 'Unknown';
+    return 'Active';
   };
 
   // Function to get the battery status icon
@@ -247,6 +276,7 @@ const Trackers: React.FC = () => {
                 <option value="connected">Connected</option>
                 <option value="disconnected">Disconnected</option>
                 <option value="lost">Lost</option>
+                <option value="recovering">Recovering</option>
                 <option value="low_battery">Low Battery</option>
               </select>
             </div>
@@ -323,9 +353,14 @@ const Trackers: React.FC = () => {
                         <div className="text-sm text-gray-500">{tracker.user_email}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={getStatusBadge(tracker)}>
-                          {getConnectionStatus(tracker)}
-                        </span>
+                        <div className="flex items-center">
+                          <span className={getStatusBadge(tracker)}>
+                            {getConnectionStatus(tracker)}
+                          </span>
+                          {getTrackerDisplayStatus(tracker.id).status === 'recovering' && (
+                            <RefreshCw className="ml-2 h-4 w-4 text-amber-500 animate-spin" />
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
@@ -375,7 +410,7 @@ const Trackers: React.FC = () => {
         </div>
         
         {/* Tracker Statistics */}
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-5">
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
             <div className="flex items-center">
               <div className="mr-4 flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 text-primary-600">
@@ -396,7 +431,7 @@ const Trackers: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Connected</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {trackers.filter(t => t.connection_status === 'connected').length}
+                  {trackers.filter(t => t.connection_status === 'connected' && getTrackerDisplayStatus(t.id).status === 'normal').length}
                 </p>
               </div>
             </div>
@@ -410,7 +445,7 @@ const Trackers: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Disconnected</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {trackers.filter(t => t.connection_status === 'disconnected').length}
+                  {trackers.filter(t => t.connection_status === 'disconnected' && getTrackerDisplayStatus(t.id).status === 'normal').length}
                 </p>
               </div>
             </div>
@@ -424,7 +459,21 @@ const Trackers: React.FC = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Lost Trackers</p>
                 <p className="text-2xl font-semibold text-gray-900">
-                  {trackers.filter(t => t.is_lost).length}
+                  {trackers.filter(t => getTrackerDisplayStatus(t.id).status === 'lost').length}
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+            <div className="flex items-center">
+              <div className="mr-4 flex h-10 w-10 items-center justify-center rounded-full bg-yellow-100 text-yellow-600">
+                <RefreshCw className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-600">Recovering</p>
+                <p className="text-2xl font-semibold text-gray-900">
+                  {trackers.filter(t => getTrackerDisplayStatus(t.id).status === 'recovering').length}
                 </p>
               </div>
             </div>

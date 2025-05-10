@@ -56,13 +56,23 @@ const Recovery: React.FC = () => {
 
       if (error) throw error;
 
+      // Import the storage utility
+      const { getStatusOverride } = await import('@/utils/storage/recoveryStatus');
+
       // Transform data to include user and tracker info directly
-      const transformedData: LogisticsRequestWithDetails[] = data.map(request => ({
-        ...request,
-        tracker_name: request.trackers?.name || 'Unknown Tracker',
-        user_email: request.profiles?.email || 'Unknown',
-        user_name: request.profiles?.name || 'Unknown'
-      }));
+      // Also check for status overrides in localStorage
+      const transformedData: LogisticsRequestWithDetails[] = data.map(request => {
+        const statusOverride = getStatusOverride(request.id);
+        return {
+          ...request,
+          tracker_name: request.trackers?.name || 'Unknown Tracker',
+          user_email: request.profiles?.email || 'Unknown',
+          user_name: request.profiles?.name || 'Unknown',
+          // Apply status override if exists
+          status: statusOverride ? statusOverride.status as any : request.status,
+          updated_at: statusOverride ? statusOverride.updated_at : request.updated_at
+        };
+      });
 
       setRequests(transformedData);
       setFilteredRequests(transformedData);

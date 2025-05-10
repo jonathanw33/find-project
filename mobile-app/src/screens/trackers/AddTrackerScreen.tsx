@@ -13,6 +13,7 @@ import {
   Platform,
 } from 'react-native';
 import { useTracker } from '../../context/TrackerContext';
+import { useSupabaseTrackers } from '../../hooks/useSupabaseTrackers';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MainStackParamList } from '../../navigation';
@@ -37,7 +38,8 @@ const AddTrackerScreen: React.FC = () => {
   } | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const { createVirtualTracker, getCurrentUserLocation } = useTracker();
+  const { getCurrentUserLocation } = useTracker();
+  const { createTracker } = useSupabaseTrackers();
   const navigation = useNavigation<NavigationProp>();
 
   useEffect(() => {
@@ -109,7 +111,7 @@ const AddTrackerScreen: React.FC = () => {
           return;
         }
         
-        await createVirtualTracker(name, {
+        await createTracker(name, 'virtual', {
           latitude: virtualLocationMarker.latitude,
           longitude: virtualLocationMarker.longitude,
           timestamp: Date.now(),
