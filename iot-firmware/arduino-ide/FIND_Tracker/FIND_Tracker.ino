@@ -8,6 +8,7 @@
 #include <EEPROM.h>
 #include "config.h"
 #include "bluetooth_manager.h"
+#include <NimBLEDevice.h>
 
 // Objects
 TinyGPSPlus gps;
@@ -39,19 +40,11 @@ void readMPU();
 bool checkMotion();
 void transmitData();
 int calculateBatteryLevel();
-void triggerBuzzer(int duration);
 void enterLowPowerMode();
 
 void setup() {
   Serial.begin(115200);
   Serial.println("FIND Tracker v" FIRMWARE_VERSION " Initializing...");
-  
-  // Initialize pins
-  pinMode(LED_PIN, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
-  
-  // Turn on LED during initialization
-  digitalWrite(LED_PIN, HIGH);
   
   // Initialize GPS
   GPSSerial.begin(GPS_BAUDRATE, SERIAL_8N1, GPS_RX, GPS_TX);
@@ -91,21 +84,6 @@ void setup() {
   Serial.print(batteryLevel);
   Serial.println("%");
   
-  // Signal ready with 3 LED flashes
-  for (int i = 0; i < 3; i++) {
-    digitalWrite(LED_PIN, HIGH);
-    delay(100);
-    digitalWrite(LED_PIN, LOW);
-    delay(100);
-  }
-  
-  // If paired, turn on LED solid briefly
-  if (config.paired) {
-    digitalWrite(LED_PIN, HIGH);
-    delay(3000);
-    digitalWrite(LED_PIN, LOW);
-  }
-  
   Serial.println("FIND Tracker Ready!");
 }
 
@@ -127,7 +105,6 @@ void loop() {
     if (!motionDetected && currentMotion) {
       motionDetected = true;
       motionStartTime = millis();
-      digitalWrite(LED_PIN, HIGH);
       
       // Transmit immediately when motion starts
       if (config.paired && WiFi.status() == WL_CONNECTED) {
@@ -137,7 +114,6 @@ void loop() {
     // State change from motion to still
     else if (motionDetected && !currentMotion) {
       motionDetected = false;
-      digitalWrite(LED_PIN, LOW);
       
       // Transmit when motion stops
       if (config.paired && WiFi.status() == WL_CONNECTED) {
@@ -204,26 +180,12 @@ void connectWiFi() {
          millis() - startTime < WIFI_CONNECT_TIMEOUT_MS) {
     delay(500);
     Serial.print(".");
-    
-    // Flash LED during connection
-    digitalWrite(LED_PIN, !digitalRead(LED_PIN));
   }
-  
-  // Turn off LED regardless of outcome
-  digitalWrite(LED_PIN, LOW);
   
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("WiFi connected!");
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
-    
-    // Three quick flashes to indicate successful connection
-    for (int i = 0; i < 3; i++) {
-      digitalWrite(LED_PIN, HIGH);
-      delay(50);
-      digitalWrite(LED_PIN, LOW);
-      delay(50);
-    }
   } else {
     Serial.println("WiFi connection failed!");
     WiFi.disconnect();
@@ -362,11 +324,6 @@ void transmitData() {
     String payload = http.getString();
     Serial.println("HTTP Response code: " + String(httpCode));
     Serial.println("Response: " + payload);
-    
-    // Flash LED briefly to indicate successful transmission
-    digitalWrite(LED_PIN, HIGH);
-    delay(50);
-    digitalWrite(LED_PIN, LOW);
   } else {
     Serial.println("Error on HTTP request: " + String(httpCode));
   }
@@ -394,12 +351,6 @@ int calculateBatteryLevel() {
   return percent;
 }
 
-void triggerBuzzer(int duration) {
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(duration);
-  digitalWrite(BUZZER_PIN, LOW);
-}
-
 void enterLowPowerMode() {
   // Implement low power mode here - can be expanded later with deep sleep
   Serial.println("Entering low power mode...");
@@ -407,11 +358,6 @@ void enterLowPowerMode() {
   // Reduce power consumption
   WiFi.disconnect(true);
   WiFi.mode(WIFI_OFF);
-  
-  // Short flash to indicate going to sleep
-  digitalWrite(LED_PIN, HIGH);
-  delay(200);
-  digitalWrite(LED_PIN, LOW);
   
   // Light sleep for a while (easier to wake up than deep sleep)
   esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_DURATION_SEC * 1000000ULL);

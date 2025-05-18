@@ -6,8 +6,6 @@
 #define GPS_TX 17
 #define MPU_SDA 21
 #define MPU_SCL 22
-#define BUZZER_PIN 13
-#define LED_PIN 2
 #define BATTERY_PIN 34  // ADC pin for battery voltage reading
 
 // Bluetooth UUIDs

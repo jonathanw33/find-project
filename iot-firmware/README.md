@@ -1,90 +1,87 @@
-# FIND System - IoT Firmware
+# ESP32 FIND Tracker Firmware
 
-This directory contains the firmware code for ESP32-based FIND trackers. The firmware will be developed in Phase 3 of the project.
-
-## Planned Features
-
-- BLE communication protocol for pairing with mobile app
-- Low-power operation with deep sleep modes
-- Accelerometer integration for motion detection
-- LED and buzzer control for alerts
-- Battery level monitoring
-- Secure communication with FIND backend
+This directory contains the firmware for the ESP32-based FIND tracker. The firmware enables communication between the physical tracker and the FIND mobile app, as well as sending location and status data to the Supabase backend.
 
 ## Hardware Requirements
 
-- ESP32 development board (recommended: ESP32-WROOM-32)
-- Battery (LiPo or Li-Ion)
-- Accelerometer (MPU-6050 or similar)
-- LED indicator
-- Buzzer for alerts
-- Button for pairing and functions
-- Charging circuit
+- ESP32 Development Board (DOIT ESP32 or similar)
+- NEO-7M GPS Module
+- MPU6500 Accelerometer/Gyroscope
+- SFM-27 Buzzer (for alerts)
+- Battery (LiPo/Li-Ion)
+- LEDs for status indication
 
-## Development Setup
+## Connections
 
-1. Install [PlatformIO](https://platformio.org/) or Arduino IDE
-2. Clone this repository
-3. Open the project in your IDE
-4. Connect your ESP32 board
-5. Build and flash the firmware
+### GPS Module (NEO-7M):
+- GPS TX → ESP32 GPIO 16 (RX2)
+- GPS RX → ESP32 GPIO 17 (TX2)
+- VCC → 5V
+- GND → GND
 
-## Project Structure
+### Accelerometer (MPU6500):
+- SDA → ESP32 GPIO 21
+- SCL → ESP32 GPIO 22
+- VCC → 3.3V
+- GND → GND
 
-```
-iot-firmware/
-├── src/                  # Source code
-│   ├── main.cpp          # Main application entry point
-│   ├── ble_manager.cpp   # BLE communication management
-│   ├── ble_manager.h
-│   ├── power_manager.cpp # Power and sleep mode management
-│   ├── power_manager.h
-│   ├── sensors.cpp       # Sensor integration (accelerometer, etc.)
-│   ├── sensors.h
-│   ├── config.h          # Configuration parameters
-│   └── utils.h           # Utility functions
-├── include/              # Additional header files
-├── lib/                  # Libraries
-├── test/                 # Unit tests
-└── platformio.ini        # PlatformIO configuration
-```
+### Buzzer:
+- Positive → ESP32 GPIO 13
+- Negative → GND
 
-## Communication Protocol
+### LED:
+- LED → ESP32 GPIO 2 (with appropriate resistor)
+- GND → GND
 
-The ESP32 tracker will communicate with the mobile app using Bluetooth Low Energy (BLE). The protocol will include:
+## Features
 
-1. **Pairing Process**: Secure device pairing with the app
-2. **Location Updates**: Sending relative location information
-3. **Battery Status**: Reporting battery level
-4. **Alerts**: Receiving and responding to alerts
-5. **Configuration**: Receiving configuration updates
+1. **Bluetooth LE Pairing**: Allows secure pairing with the FIND mobile app
+2. **WiFi Connectivity**: Connects to user's WiFi to transmit data to Supabase
+3. **GPS Location Tracking**: Provides accurate location data
+4. **Motion Detection**: Uses accelerometer to detect movement
+5. **Power Management**: Implements sleep modes for battery efficiency
+6. **Alert System**: Buzzer activation for local alerts
 
-## Power Management
+## Files Included
 
-To ensure long battery life, the firmware will:
+- `main.cpp`: Main application code
+- `bluetooth_manager.cpp/h`: Bluetooth LE implementation
+- `config.h`: Configuration parameters
 
-1. Use deep sleep modes when not in use
-2. Wake on motion detection or timer
-3. Optimize BLE connection parameters
-4. Monitor and report battery levels
-5. Provide low-battery warnings
+## Installation Instructions
 
-## Future Enhancements
+1. Install [PlatformIO](https://platformio.org/) extension in Visual Studio Code
+2. Open this firmware directory as a PlatformIO project
+3. Connect your ESP32 board via USB
+4. Upload the firmware using PlatformIO
 
-- WiFi connectivity for more accurate location
-- Mesh networking between multiple trackers
-- OTA (Over-The-Air) firmware updates
-- Custom PCB design for smaller form factor
+## Pairing Process
 
-## Development Guidelines
+1. Power on the tracker
+2. Use the FIND mobile app to scan for available trackers
+3. Select your tracker from the list
+4. Enter your WiFi credentials in the app
+5. The app will send the configuration to the tracker and register it in Supabase
+6. Upon successful pairing, the tracker's LED will turn solid for 3 seconds
 
-- Follow the Arduino coding style
-- Document all functions and methods
-- Include comments explaining complex logic
-- Write unit tests for core functionality
-- Prioritize power efficiency and reliability
+## Troubleshooting
 
-## Related Documentation
+- **Tracker not visible in BLE scan**: Make sure the tracker is powered on and within range
+- **Failed to connect**: Restart the tracker and try again
+- **WiFi connection failure**: Check WiFi credentials and signal strength
+- **Location data issues**: Ensure GPS module has clear view of the sky
 
-- [ESP32 Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32_technical_reference_manual_en.pdf)
-- [ESP-IDF Programming Guide](https://docs.espressif.com/projects/esp-idf/en/latest/esp32/)
+## Power Consumption
+
+- **Active Mode**: ~80mA with GPS and WiFi active
+- **Low Power Mode**: ~15mA with GPS active, WiFi sleeping
+- **Deep Sleep**: ~2mA with GPS off, periodic wake-ups
+
+## Development Notes
+
+The firmware is configured to:
+1. Start in pairing mode (Bluetooth LE advertising)
+2. Once paired and configured, connect to WiFi
+3. Transmit data to Supabase every 60 seconds by default
+4. Enter low power modes when no movement is detected
+5. Wake up on motion events detected by the accelerometer

@@ -520,6 +520,35 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                     <Text style={[styles.detailValue, styles.deviceIdText]}>{tracker.bleId}</Text>
                   </View>
                 )}
+                <TouchableOpacity
+                  style={styles.pairDeviceButton}
+                  onPress={() => {
+                    // Show options to choose BLE or manual pairing
+                    Alert.alert(
+                      'Pairing Method',
+                      'Choose how to pair this tracker with a physical device',
+                      [
+                        {
+                          text: 'Bluetooth Pairing',
+                          onPress: () => navigation.navigate('PairDevice', { trackerId: tracker.id })
+                        },
+                        {
+                          text: 'Manual Pairing',
+                          onPress: () => navigation.navigate('SimplePairDevice', { trackerId: tracker.id })
+                        },
+                        {
+                          text: 'Cancel',
+                          style: 'cancel'
+                        }
+                      ]
+                    );
+                  }}
+                >
+                  <Ionicons name="bluetooth" size={20} color="#fff" />
+                  <Text style={styles.pairDeviceButtonText}>
+                    {tracker.connectionStatus === 'connected' ? 'Reconfigure Device' : 'Pair Physical Device'}
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
@@ -853,6 +882,22 @@ const styles = StyleSheet.create({
   simulationButtonText: {
     color: '#fff',
     fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  pairDeviceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#007AFF',
+    marginTop: 16,
+  },
+  pairDeviceButtonText: {
+    color: '#fff',
+    fontSize: 15,
     fontWeight: '600',
     marginLeft: 8,
   },

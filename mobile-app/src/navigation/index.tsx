@@ -18,6 +18,8 @@ import MapScreen from '../screens/map/MapScreen';
 import TrackerListScreen from '../screens/trackers/TrackerListScreen';
 import TrackerDetailScreen from '../screens/trackers/TrackerDetailScreen';
 import AddTrackerScreen from '../screens/trackers/AddTrackerScreen';
+import PairDeviceScreen from '../screens/trackers/physical/PairDeviceScreen';
+import SimplePairDeviceScreen from '../screens/trackers/physical/SimplePairDeviceScreen';
 import AlertsScreen from '../screens/alerts/AlertsScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import SettingsScreen from '../screens/profile/SettingsScreen';
@@ -33,6 +35,8 @@ export type MainStackParamList = {
   Tabs: undefined;
   TrackerDetail: { trackerId: string };
   AddTracker: undefined;
+  PairDevice: { trackerId: string };
+  SimplePairDevice: { trackerId: string };
   Settings: undefined;
 };
 
@@ -119,6 +123,16 @@ const MainNavigator = () => {
         name="Settings" 
         component={SettingsScreen} 
         options={{ title: 'Settings' }}
+      />
+      <MainStack.Screen 
+        name="PairDevice" 
+        component={PairDeviceScreen} 
+        options={{ title: 'Pair Physical Device', headerShown: false }}
+      />
+      <MainStack.Screen 
+        name="SimplePairDevice" 
+        component={SimplePairDeviceScreen} 
+        options={{ title: 'Manual Device Pairing', headerShown: false }}
       />
     </MainStack.Navigator>
   );

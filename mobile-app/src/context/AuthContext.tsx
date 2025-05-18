@@ -10,10 +10,6 @@ import {
 import { RootState } from '../redux/store';
 import { createClient } from '@supabase/supabase-js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { mockUserData } from '../services/mockData';
-
-// Flag to use mock data instead of actual Supabase calls
-const USE_MOCK_DATA = false; // Using real Supabase connections
 
 // Initialize Supabase client
 const supabaseUrl = 'https://hxdurjngbkfnbryzczau.supabase.co';
@@ -78,17 +74,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: session.user.user_metadata?.name,
           avatarUrl: session.user.user_metadata?.avatar_url,
         }));
-      } else if (USE_MOCK_DATA) {
-        console.log("No session found, using mock user");
-        // For demo purposes, only set a mock user if USE_MOCK_DATA is true
-        dispatch(setUser({
-          id: 'mock-user-id',
-          email: 'demo@example.com',
-          name: 'Demo User',
-          avatarUrl: null,
-        }));
       } else {
-        // No session and not using mock data, so ensure user is logged out
+        // No session, ensure user is logged out
         dispatch(logoutAction());
       }
       dispatch(setLoading(false));
@@ -104,14 +91,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const checkUser = async () => {
     try {
-      if (USE_MOCK_DATA) {
-        // Use mock data instead of API call
-        console.log('Using mock data for checkUser');
-        // Simulate a successful session check
-        dispatch(setUser(mockUserData));
-        return;
-      }
-      
       const { data: { session } } = await supabase.auth.getSession();
       if (session?.user) {
         dispatch(setUser({
@@ -133,17 +112,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       dispatch(setLoading(true));
       
-      if (USE_MOCK_DATA) {
-        // Use mock data instead of API call
-        console.log('Using mock data for signUp');
-        // Simulate a successful signup
-        setTimeout(() => {
-          dispatch(setUser(mockUserData));
-          dispatch(setLoading(false));
-        }, 1000);
-        return;
-      }
-      
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -154,26 +122,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatch(setError((error as Error).message));
       throw error;
     } finally {
-      if (!USE_MOCK_DATA) {
-        dispatch(setLoading(false));
-      }
+      dispatch(setLoading(false));
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
       dispatch(setLoading(true));
-      
-      if (USE_MOCK_DATA) {
-        // Use mock data instead of API call
-        console.log('Using mock data for signIn');
-        // Simulate a successful login
-        setTimeout(() => {
-          dispatch(setUser(mockUserData));
-          dispatch(setLoading(false));
-        }, 1000);
-        return;
-      }
       
       const { error } = await supabase.auth.signInWithPassword({
         email,
@@ -185,9 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       dispatch(setError((error as Error).message));
       throw error;
     } finally {
-      if (!USE_MOCK_DATA) {
-        dispatch(setLoading(false));
-      }
+      dispatch(setLoading(false));
     }
   };
 

@@ -1,44 +1,70 @@
-import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-url-polyfill/auto';
+import 'react-native-get-random-values';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { createClient } from '@supabase/supabase-js';
 import { Database } from '../types/supabase';
 
 // Supabase configuration
 const supabaseUrl = 'https://hxdurjngbkfnbryzczau.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZHVyam5nYmtmbmJyeXpjemF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMzIwOTIsImV4cCI6MjA2MDYwODA5Mn0.goPuYbHra2eHKSFidqYMiDbJ5KlYF3WLr0KGqSt62Xw';
 
-// Completely disable realtime features to avoid WebSocket dependencies
-export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage as any,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
-  },
-  realtime: {
-    enabled: false,
-  },
-});
+// Create Supabase client with error handling
+let supabase;
+try {
+  console.log('Creating Supabase client with URL:', supabaseUrl);
+  
+  // Completely disable realtime features to avoid WebSocket dependencies
+  supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      storage: AsyncStorage as any,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+    realtime: {
+      enabled: false,
+    },
+  });
+  
+  console.log('Supabase client created successfully');
+  
+  // Add supabaseAnonKey to the exported supabase object for use in bluetoothService
+  supabase.supabaseUrl = supabaseUrl;
+  supabase.supabaseAnonKey = supabaseAnonKey;
+} catch (error) {
+  console.error('Error creating Supabase client:', error);
+  
+  // Fallback to mock implementation
+  supabase = require('./mockSupabase').supabase;
+  console.log('Using mock Supabase client as fallback');
+}
+
+export { supabase };
 
 // Tracker services
 export const trackerService = {
   // Get all trackers for current user
   async getTrackers() {
-    // Get the current user ID
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      throw new Error('User not authenticated. Please log in.');
+    try {
+      // Get the current user ID
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('User not authenticated. Please log in.');
+      }
+      
+      const { data, error } = await supabase
+        .from('trackers')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    } catch (error) {
+      console.error('Error in getTrackers:', error);
+      throw error;
     }
-    
-    const { data, error } = await supabase
-      .from('trackers')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
-    
-    if (error) throw error;
-    return data;
   },
   
   // Get a single tracker by id
