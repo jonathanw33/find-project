@@ -68,12 +68,14 @@ void setup() {
   Serial.println("Config loaded");
   
   // Show device ID
-  if (strlen(config.device_id) > 0) {
+  if (strlen(config.device_id) > 0 && config.device_id[0] != '\0' && config.device_id[0] != 255) {
     deviceId = String(config.device_id);
     Serial.print("Device ID: ");
     Serial.println(deviceId);
   } else {
     Serial.println("No device ID set - needs pairing");
+    // Clear the device ID to ensure it's properly blank
+    memset(config.device_id, 0, sizeof(config.device_id));
   }
   
   // Setup Bluetooth for pairing
@@ -169,13 +171,41 @@ void loadConfig() {
   EEPROM.get(0, config);
   EEPROM.end();
   
-  // Set default values if not configured
-  if (config.transmit_interval == 0) {
-    config.transmit_interval = DEFAULT_TRANSMIT_INTERVAL;
+  // Check if configuration is valid by examining key fields
+  bool configValid = true;
+  
+  // Check if memory is uninitialized (typically 0xFF in fresh EEPROM)
+  if (config.transmit_interval == 0 || config.transmit_interval == 0xFFFF) {
+    configValid = false;
   }
   
-  if (config.motion_threshold == 0) {
+  // Check device_id validity - if first character is non-printable, it's probably invalid
+  if (config.device_id[0] < 32 || config.device_id[0] > 126) {
+    // Clear the device ID to make sure it's properly blank
+    memset(config.device_id, 0, sizeof(config.device_id));
+    configValid = false;
+  }
+  
+  // Set default values if configuration is invalid
+  if (!configValid) {
+    Serial.println("Invalid or missing configuration, setting defaults");
+    config.transmit_interval = DEFAULT_TRANSMIT_INTERVAL;
     config.motion_threshold = DEFAULT_MOTION_THRESHOLD;
+    config.paired = false;
+    
+    // Clear WiFi credentials
+    memset(config.wifi_ssid, 0, sizeof(config.wifi_ssid));
+    memset(config.wifi_password, 0, sizeof(config.wifi_password));
+    
+    // Clear API configuration
+    memset(config.api_endpoint, 0, sizeof(config.api_endpoint));
+    memset(config.api_key, 0, sizeof(config.api_key));
+    
+    // Save default configuration
+    EEPROM.begin(512);
+    EEPROM.put(0, config);
+    EEPROM.commit();
+    EEPROM.end();
   }
 }
 

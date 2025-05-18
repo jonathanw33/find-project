@@ -65,17 +65,72 @@ const AddTrackerScreen: React.FC = () => {
     getInitialLocation();
   }, []);
 
-  const handleScanForDevices = () => {
-    // In a real app, this would initiate BLE scanning
+  const handleScanForDevices = async () => {
     setIsScanning(true);
     
-    // Simulate finding a device after 2 seconds
-    setTimeout(() => {
+    try {
+      // Try to use the real BLE scanner if available
+      if (Platform.OS !== 'web') {
+        // Import the bluetoothService to scan for devices
+        const { bluetoothService } = require('../../services/bluetooth/bluetoothService');
+        
+        // Request necessary permissions
+        const hasPermissions = await bluetoothService.requestPermissions();
+        if (!hasPermissions) {
+          throw new Error('Bluetooth permissions not granted');
+        }
+        
+        // Start scanning for devices
+        let deviceFound = false;
+        await bluetoothService.startScan((device) => {
+          // When a device is found, stop scanning and update the UI
+          deviceFound = true;
+          setBleId(device.id);
+          bluetoothService.stopScan();
+          setIsScanning(false);
+          Alert.alert('Device Found', `FIND Tracker detected: ${device.name || 'Unknown'}`);
+        });
+        
+        // Stop scanning after 10 seconds if no devices found
+        setTimeout(() => {
+          if (isScanning && !deviceFound) {
+            bluetoothService.stopScan();
+            setIsScanning(false);
+            Alert.alert('No Devices Found', 'Could not find any FIND Trackers nearby.');
+          }
+        }, 10000);
+      } else {
+        // If on web or Bluetooth not supported, simulate device discovery
+        setTimeout(() => {
+          setIsScanning(false);
+          // Generate a mock BLE ID
+          const mockId = 'MOCK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+          setBleId(mockId);
+          Alert.alert('Device Found', 'FIND Tracker detected (simulated)');
+        }, 2000);
+      }
+    } catch (error) {
+      console.error('Error scanning for devices:', error);
       setIsScanning(false);
-      // For demo purposes, we'll just set a mock BLE ID
-      setBleId('D4:3B:7A:12:9F:E5');
-      Alert.alert('Device Found', 'FIND Tracker detected');
-    }, 2000);
+      Alert.alert(
+        'Scan Error',
+        'Failed to scan for devices. Would you like to use mock data instead?',
+        [
+          {
+            text: 'Cancel',
+            style: 'cancel'
+          },
+          {
+            text: 'Use Mock Data',
+            onPress: () => {
+              // Generate a mock BLE ID
+              const mockId = 'MOCK-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+              setBleId(mockId);
+            }
+          }
+        ]
+      );
+    }
   };
 
   const handleMapPress = (e: any) => {
@@ -99,10 +154,39 @@ const AddTrackerScreen: React.FC = () => {
       setLoading(true);
       
       if (isPhysical) {
-        // In a real app, you would register the physical tracker
-        Alert.alert('Not Implemented', 'Physical tracker registration is not implemented in this demo');
-        setLoading(false);
-        return;
+        // Create the tracker first
+        const newTracker = await createTracker(name, 'physical');
+        
+        // Navigate to the pairing screen with the new tracker ID
+        if (Platform.OS === 'web') {
+          // For web testing, use SimplePairDeviceScreen
+          navigation.navigate('SimplePairDevice', { trackerId: newTracker.id });
+        } else {
+          // Try to use PairDeviceScreen first, but offer SimplePairDevice as fallback
+          try {
+            navigation.navigate('PairDevice', { trackerId: newTracker.id });
+          } catch (error) {
+            console.error('Error navigating to PairDevice:', error);
+            Alert.alert(
+              'Bluetooth Unavailable',
+              'Would you like to use the simplified pairing screen instead?',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                  onPress: () => {
+                    // Delete the tracker if user cancels
+                    // deleteTracker(newTracker.id); // Uncomment if needed
+                  }
+                },
+                {
+                  text: 'Yes',
+                  onPress: () => navigation.navigate('SimplePairDevice', { trackerId: newTracker.id })
+                }
+              ]
+            );
+          }
+        }
       } else {
         // Create a virtual tracker
         if (!virtualLocationMarker) {
