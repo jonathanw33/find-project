@@ -62,11 +62,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const { user, loading, error } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
-    // Check for existing session on app load
+    // Set loading state to true while we check for an existing session
     dispatch(setLoading(true));
     
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       console.log("Auth state changed:", event, session?.user?.id);
+      
       if (session?.user) {
         dispatch(setUser({
           id: session.user.id,
@@ -75,13 +76,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           avatarUrl: session.user.user_metadata?.avatar_url,
         }));
       } else {
-        // No session, ensure user is logged out
+        // No session, so ensure user is logged out
         dispatch(logoutAction());
       }
+      
+      // Only set loading to false after we've processed the auth state
       dispatch(setLoading(false));
     });
 
-    // Initial session check
+    // Initial session check - the loading state will be updated by the onAuthStateChange listener
     checkUser();
 
     return () => {
@@ -92,6 +95,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkUser = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
+      
+      // Only directly update user state if we have a session
+      // Otherwise, let the onAuthStateChange handler handle it
       if (session?.user) {
         dispatch(setUser({
           id: session.user.id,
@@ -99,11 +105,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           name: session.user.user_metadata?.name,
           avatarUrl: session.user.user_metadata?.avatar_url,
         }));
+        
+        // We've set the user, but let the auth state change listener handle setting loading to false
+      } else {
+        // No session found, explicitly set loading to false in case the auth state change event doesn't fire
+        setTimeout(() => {
+          dispatch(setLoading(false));
+        }, 500);  // Short delay to let any pending auth state changes process first
       }
     } catch (error) {
       console.error('Error checking user session:', error);
       dispatch(setError((error as Error).message));
-    } finally {
       dispatch(setLoading(false));
     }
   };

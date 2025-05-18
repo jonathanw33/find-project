@@ -52,12 +52,18 @@ const simulationIntervals: Record<string, NodeJS.Timeout> = {};
 export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const dispatch = useDispatch();
   const { trackers, selectedTrackerId } = useSelector((state: RootState) => state.trackers);
-  const { user } = useSelector((state: RootState) => state.auth);
+  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
 
   useEffect(() => {
-    // Load trackers when component mounts or user changes
-    console.log("TrackerProvider mounted or user changed:", user?.id);
-    loadTrackers();
+    // Only load trackers when auth is not loading and we have a user
+    console.log("TrackerProvider mounted or user changed:", user?.id, "Auth loading:", authLoading);
+    
+    if (!authLoading && user) {
+      loadTrackers();
+    } else if (!authLoading && !user) {
+      // Clear trackers when user logs out
+      dispatch(setTrackers([])); // Pass an empty array, not an empty object
+    }
 
     // Clean up any simulations on unmount
     return () => {
@@ -66,12 +72,18 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         delete simulationIntervals[id];
       });
     };
-  }, [user]);
+  }, [user, authLoading]);
 
   const loadTrackers = async () => {
+    // Add a safety check to ensure we have a user before making the Supabase call
+    if (!user || !user.id) {
+      console.log("Not loading trackers - no user is authenticated");
+      return;
+    }
+    
     try {
       dispatch(setTrackerLoading(true));
-      console.log("Loading trackers for user:", user?.id || "no user");
+      console.log("Loading trackers for user:", user.id);
       
       // Fetch trackers from Supabase
       const trackersData = await trackerService.getTrackers();
@@ -95,10 +107,24 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       }));
       
       console.log("Setting trackers from Supabase:", transformedTrackers);
-      dispatch(setTrackers(transformedTrackers));
+      
+      // Make sure we're passing an array, even if empty
+      dispatch(setTrackers(transformedTrackers || []));
     } catch (error) {
       console.error("Error loading trackers:", error);
-      dispatch(setTrackerError((error as Error).message));
+      
+      // Don't show auth errors if we have a valid user (could be a temporary auth token issue)
+      if (user && user.id && (error as Error).message.includes('User not authenticated')) {
+        console.log("Ignoring auth error since we have a valid user:", user.id);
+        // Try again after a short delay - could be a token refresh issue
+        setTimeout(() => {
+          if (user && user.id) {
+            loadTrackers();
+          }
+        }, 1000);
+      } else {
+        dispatch(setTrackerError((error as Error).message));
+      }
     } finally {
       dispatch(setTrackerLoading(false));
     }

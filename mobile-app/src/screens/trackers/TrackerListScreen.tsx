@@ -23,6 +23,7 @@ type NavigationProp = StackNavigationProp<MainStackParamList>;
 
 const TrackerListScreen: React.FC = () => {
   const { trackers, loading, error } = useSelector((state: RootState) => state.trackers);
+  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth);
   const dispatch = useDispatch();
   const navigation = useNavigation<NavigationProp>();
   const { deleteTracker: contextDeleteTracker } = useTracker();
@@ -32,8 +33,22 @@ const TrackerListScreen: React.FC = () => {
   const trackersArray = Object.values(trackers);
 
   useEffect(() => {
-    // Load trackers when the component mounts
-    fetchTrackers();
+    // Load trackers when the component mounts, but only if we have enough time for auth to complete
+    const loadTrackers = async () => {
+      try {
+        await fetchTrackers();
+      } catch (error) {
+        console.error('Error loading trackers on mount:', error);
+        // We'll handle this elsewhere
+      }
+    };
+    
+    // Delay initial load slightly to give auth a chance to complete
+    const timer = setTimeout(loadTrackers, 500);
+    
+    return () => {
+      clearTimeout(timer);
+    };
   }, []);
 
   const handleRefresh = async () => {
@@ -43,6 +58,7 @@ const TrackerListScreen: React.FC = () => {
       await fetchTrackers();
     } catch (error) {
       console.error('Error refreshing trackers:', error);
+      // Don't show alert here, we'll handle it via the error state
     } finally {
       setRefreshing(false);
     }
@@ -148,11 +164,13 @@ const TrackerListScreen: React.FC = () => {
     </TouchableOpacity>
   );
 
-  if (loading && !refreshing && trackersArray.length === 0) {
+  if ((loading || authLoading) && !refreshing && trackersArray.length === 0) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading trackers...</Text>
+        <Text style={styles.loadingText}>
+          {authLoading ? 'Verifying authentication...' : 'Loading trackers...'}
+        </Text>
       </View>
     );
   }
@@ -169,9 +187,14 @@ const TrackerListScreen: React.FC = () => {
         </TouchableOpacity>
       </View>
 
-      {error && (
+      {error && !error.includes('User not authenticated') && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={handleRefresh}>
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -310,6 +333,19 @@ const styles = StyleSheet.create({
   errorText: {
     color: '#D8000C',
     fontSize: 14,
+    marginBottom: 10,
+  },
+  retryButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 5,
+    alignSelf: 'flex-end',
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '600',
   },
   emptyContainer: {
     flex: 1,

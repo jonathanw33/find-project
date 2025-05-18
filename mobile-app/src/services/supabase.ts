@@ -24,6 +24,11 @@ try {
     realtime: {
       enabled: false,
     },
+    global: {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    },
   });
   
   console.log('Supabase client created successfully');
@@ -31,12 +36,43 @@ try {
   // Add supabaseAnonKey to the exported supabase object for use in bluetoothService
   supabase.supabaseUrl = supabaseUrl;
   supabase.supabaseAnonKey = supabaseAnonKey;
+  
+  // Set up session refresh timer
+  setInterval(async () => {
+    try {
+      const { data } = await supabase.auth.getSession();
+      if (data?.session) {
+        // This will trigger a token refresh if needed
+        await supabase.auth.refreshSession();
+      }
+    } catch (e) {
+      console.error('Error refreshing token:', e);
+    }
+  }, 60000); // Check every minute
+  
 } catch (error) {
   console.error('Error creating Supabase client:', error);
   
-  // Fallback to mock implementation
-  supabase = require('./mockSupabase').supabase;
-  console.log('Using mock Supabase client as fallback');
+  // Create a minimal mock implementation
+  supabase = {
+    auth: {
+      getUser: async () => ({ data: { user: null }, error: null }),
+      getSession: async () => ({ data: { session: null }, error: null }),
+      signInWithPassword: async () => ({ data: null, error: new Error('Supabase not available') }),
+      signOut: async () => ({ error: null }),
+    },
+    from: () => ({
+      select: () => ({
+        eq: () => ({
+          order: () => ({
+            limit: () => ({ data: [], error: null }),
+          })
+        })
+      }),
+    }),
+    rpc: async () => ({ data: null, error: new Error('Supabase not available') }),
+  };
+  console.log('Using minimal mock Supabase client as fallback');
 }
 
 export { supabase };
@@ -47,9 +83,15 @@ export const trackerService = {
   async getTrackers() {
     try {
       // Get the current user ID
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
+      
+      if (authError) {
+        console.error("Auth error in getTrackers:", authError);
+        throw new Error("Authentication error: " + authError.message);
+      }
       
       if (!user) {
+        console.error("User not authenticated in getTrackers");
         throw new Error('User not authenticated. Please log in.');
       }
       
@@ -59,8 +101,12 @@ export const trackerService = {
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
       
-      if (error) throw error;
-      return data;
+      if (error) {
+        console.error("Database error in getTrackers:", error);
+        throw error;
+      }
+      
+      return data || [];
     } catch (error) {
       console.error('Error in getTrackers:', error);
       throw error;

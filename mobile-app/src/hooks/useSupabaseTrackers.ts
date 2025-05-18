@@ -21,29 +21,51 @@ export const useSupabaseTrackers = () => {
   const fetchTrackers = async () => {
     try {
       dispatch(setTrackerLoading(true));
-      const trackersData = await trackerService.getTrackers();
       
-      // Transform data to match our redux format
-      const transformedTrackers: Tracker[] = trackersData.map(tracker => ({
-        id: tracker.id,
-        name: tracker.name,
-        type: tracker.type,
-        icon: tracker.icon || undefined,
-        batteryLevel: tracker.battery_level || undefined,
-        isActive: tracker.is_active,
-        lastSeen: tracker.last_seen_latitude && tracker.last_seen_longitude ? {
-          latitude: tracker.last_seen_latitude,
-          longitude: tracker.last_seen_longitude,
-          timestamp: tracker.last_seen_timestamp ? new Date(tracker.last_seen_timestamp).getTime() : Date.now(),
-        } : null,
-        locationHistory: [], // We'll fetch this separately when needed
-        connectionStatus: tracker.connection_status as any || undefined,
-        bleId: tracker.ble_id || undefined,
-      }));
-      
-      dispatch(setTrackers(transformedTrackers));
-      return transformedTrackers;
+      try {
+        const trackersData = await trackerService.getTrackers();
+        
+        // Transform data to match our redux format
+        const transformedTrackers: Tracker[] = trackersData.map(tracker => ({
+          id: tracker.id,
+          name: tracker.name,
+          type: tracker.type,
+          icon: tracker.icon || undefined,
+          batteryLevel: tracker.battery_level || undefined,
+          isActive: tracker.is_active,
+          lastSeen: tracker.last_seen_latitude && tracker.last_seen_longitude ? {
+            latitude: tracker.last_seen_latitude,
+            longitude: tracker.last_seen_longitude,
+            timestamp: tracker.last_seen_timestamp ? new Date(tracker.last_seen_timestamp).getTime() : Date.now(),
+          } : null,
+          locationHistory: [], // We'll fetch this separately when needed
+          connectionStatus: tracker.connection_status as any || undefined,
+          bleId: tracker.ble_id || undefined,
+        }));
+        
+        dispatch(setTrackers(transformedTrackers));
+        
+        // Clear any previous errors
+        if (transformedTrackers.length > 0) {
+          dispatch(setTrackerError(null));
+        }
+        
+        return transformedTrackers;
+      } catch (error) {
+        // Handle authentication errors specially
+        if ((error as Error).message.includes('User not authenticated')) {
+          console.log('Authentication issue when fetching trackers - will retry later');
+          // Don't show auth errors to users who see the UI (they're already logged in visually)
+          // Just return an empty array instead
+          dispatch(setTrackers([]));
+          return [];
+        } else {
+          // For other errors, propagate them
+          throw error;
+        }
+      }
     } catch (error) {
+      console.error('Error fetching trackers:', error);
       dispatch(setTrackerError((error as Error).message));
       throw error;
     } finally {

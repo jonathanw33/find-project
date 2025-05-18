@@ -36,7 +36,8 @@ const MapScreen: React.FC = () => {
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [loading, setLoading] = useState(true);
   const mapRef = useRef<MapView>(null);
-  const { trackers, selectedTrackerId } = useSelector((state: RootState) => state.trackers);
+  const { trackers, selectedTrackerId, loading: trackersLoading, error: trackersError } = useSelector((state: RootState) => state.trackers);
+  const { user, loading: authLoading } = useSelector((state: RootState) => state.auth); 
   const dispatch = useDispatch();
   const navigation = useNavigation<NavigationProp>();
   const { createVirtualTracker, selectTracker, getCurrentUserLocation } = useTracker();
@@ -84,6 +85,11 @@ const MapScreen: React.FC = () => {
       }
     };
 
+    // Don't try to load data if still authenticating
+    if (authLoading) {
+      return;
+    }
+
     // Debug trackers in the Redux store
     console.log("Current trackers in MapScreen:", Object.values(trackers));
 
@@ -104,7 +110,7 @@ const MapScreen: React.FC = () => {
       // Clean up subscription
       locationSubscription.then((sub) => sub.remove());
     };
-  }, [selectedTrackerId, trackers]);
+  }, [selectedTrackerId, trackers, authLoading]);
 
   const handleMarkerPress = (trackerId: string) => {
     dispatch(setSelectedTracker(trackerId));
@@ -140,11 +146,32 @@ const MapScreen: React.FC = () => {
     dispatch(setSelectedTracker(null));
   };
 
-  if (loading) {
+  if (loading || authLoading || trackersLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
-        <Text style={styles.loadingText}>Loading map...</Text>
+        <Text style={styles.loadingText}>
+          {authLoading ? 'Checking authentication...' : 
+           trackersLoading ? 'Loading tracker data...' : 
+           'Loading map...'}
+        </Text>
+      </View>
+    );
+  }
+
+  // Show error if there's a tracker error and we're authenticated
+  if (trackersError && !authLoading && user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Ionicons name="alert-circle" size={40} color="#FF3B30" />
+        <Text style={[styles.loadingText, { color: '#FF3B30' }]}>
+          Error loading trackers: {trackersError}
+        </Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => navigation.navigate('Trackers')}>
+          <Text style={styles.retryButtonText}>Go to Trackers</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -163,7 +190,7 @@ const MapScreen: React.FC = () => {
           showsScale
           onRegionChangeComplete={setRegion}
         >
-          {Object.values(trackers).map((tracker) => (
+          {Object.values(trackers || {}).map((tracker) => (
             tracker.lastSeen && (
               <Marker
                 key={tracker.id}
@@ -196,7 +223,7 @@ const MapScreen: React.FC = () => {
           </TouchableOpacity>
         </View>
 
-        {selectedTrackerId && trackers[selectedTrackerId] && (
+        {selectedTrackerId && trackers && trackers[selectedTrackerId] && (
           <View style={styles.trackerInfoContainer}>
             <TrackerInfoCard
               tracker={trackers[selectedTrackerId]}
@@ -225,6 +252,18 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 16,
     color: '#666',
+  },
+  retryButton: {
+    marginTop: 20,
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   map: {
     width: Dimensions.get('window').width,
