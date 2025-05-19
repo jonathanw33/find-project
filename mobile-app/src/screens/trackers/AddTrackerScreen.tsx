@@ -157,35 +157,39 @@ const AddTrackerScreen: React.FC = () => {
         // Create the tracker first
         const newTracker = await createTracker(name, 'physical');
         
-        // Navigate to the pairing screen with the new tracker ID
-        if (Platform.OS === 'web') {
-          // For web testing, use SimplePairDeviceScreen
+        // Import the bluetoothService to check if BLE is available
+        let bleAvailable = false;
+        try {
+          if (Platform.OS !== 'web') {
+            const { bluetoothService } = require('../../services/bluetooth/bluetoothService');
+            bleAvailable = bluetoothService && bluetoothService.bleAvailable;
+          }
+        } catch (error) {
+          console.error('Error checking BLE availability:', error);
+          bleAvailable = false;
+        }
+        
+        // Navigate to the appropriate pairing screen based on BLE availability
+        if (Platform.OS === 'web' || !bleAvailable) {
+          // For web testing or when BLE is unavailable, use SimplePairDeviceScreen directly
           navigation.navigate('SimplePairDevice', { trackerId: newTracker.id });
         } else {
-          // Try to use PairDeviceScreen first, but offer SimplePairDevice as fallback
-          try {
-            navigation.navigate('PairDevice', { trackerId: newTracker.id });
-          } catch (error) {
-            console.error('Error navigating to PairDevice:', error);
-            Alert.alert(
-              'Bluetooth Unavailable',
-              'Would you like to use the simplified pairing screen instead?',
-              [
-                {
-                  text: 'Cancel',
-                  style: 'cancel',
-                  onPress: () => {
-                    // Delete the tracker if user cancels
-                    // deleteTracker(newTracker.id); // Uncomment if needed
-                  }
-                },
-                {
-                  text: 'Yes',
-                  onPress: () => navigation.navigate('SimplePairDevice', { trackerId: newTracker.id })
-                }
-              ]
-            );
-          }
+          // Show alert with options to choose which pairing method to use
+          Alert.alert(
+            'Choose Pairing Method',
+            'How would you like to pair your physical tracker?',
+            [
+              {
+                text: 'Bluetooth Pairing',
+                onPress: () => navigation.navigate('PairDevice', { trackerId: newTracker.id })
+              },
+              {
+                text: 'Manual Pairing',
+                onPress: () => navigation.navigate('SimplePairDevice', { trackerId: newTracker.id })
+              }
+            ],
+            { cancelable: false }
+          );
         }
       } else {
         // Create a virtual tracker
@@ -240,7 +244,13 @@ const AddTrackerScreen: React.FC = () => {
               <Text style={styles.switchLabel}>Physical Tracker</Text>
               <Switch
                 value={isPhysical}
-                onValueChange={setIsPhysical}
+                onValueChange={(value) => {
+                  setIsPhysical(value);
+                  // Reset BLE ID when switching modes
+                  if (!value) {
+                    setBleId('');
+                  }
+                }}
                 trackColor={{ false: '#ccc', true: '#bbd6fe' }}
                 thumbColor={isPhysical ? '#007AFF' : '#f4f3f4'}
               />
@@ -259,27 +269,41 @@ const AddTrackerScreen: React.FC = () => {
                     <Text style={styles.connectedText}>Connected</Text>
                   </View>
                 ) : (
-                  <TouchableOpacity
-                    style={styles.scanButton}
-                    onPress={handleScanForDevices}
-                    disabled={isScanning}
-                  >
-                    {isScanning ? (
-                      <>
-                        <ActivityIndicator size="small" color="#fff" />
-                        <Text style={styles.scanButtonText}>Scanning...</Text>
-                      </>
-                    ) : (
-                      <>
-                        <Ionicons name="bluetooth" size={20} color="#fff" />
-                        <Text style={styles.scanButtonText}>Scan for Devices</Text>
-                      </>
-                    )}
-                  </TouchableOpacity>
+                  <>
+                    <TouchableOpacity
+                      style={styles.scanButton}
+                      onPress={handleScanForDevices}
+                      disabled={isScanning}
+                    >
+                      {isScanning ? (
+                        <>
+                          <ActivityIndicator size="small" color="#fff" />
+                          <Text style={styles.scanButtonText}>Scanning...</Text>
+                        </>
+                      ) : (
+                        <>
+                          <Ionicons name="bluetooth" size={20} color="#fff" />
+                          <Text style={styles.scanButtonText}>Scan for Devices</Text>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                      style={styles.manualPairingButton} 
+                      onPress={() => {
+                        // Generate a mock BLE ID for the device
+                        const mockId = 'MANUAL-' + Math.random().toString(36).substring(2, 10).toUpperCase();
+                        setBleId(mockId);
+                      }}
+                    >
+                      <Ionicons name="create-outline" size={20} color="#fff" />
+                      <Text style={styles.manualPairingText}>Set Up Manually</Text>
+                    </TouchableOpacity>
+                  </>
                 )}
                 
                 <Text style={styles.helpText}>
-                  Make sure your physical tracker is nearby and in pairing mode.
+                  Make sure your physical tracker is nearby and in pairing mode, or select "Set Up Manually" if you prefer to configure the device without using Bluetooth.
                 </Text>
               </View>
             ) : (
@@ -423,6 +447,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 10,
+  },
+  manualPairingButton: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  manualPairingText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 16,
+    marginLeft: 8,
   },
   scanButtonText: {
     color: '#fff',

@@ -97,10 +97,11 @@ const SimplePairDeviceScreen = ({ route }) => {
       
       console.log('User authenticated:', user.id);
       
-      // Call the pair_physical_device RPC function
+      // Call the pair_physical_device RPC function with parameters in correct order
+      // The order appears to be: tracker_id, device_uuid, device_name, device_model
       const { data, error } = await supabaseClient.rpc('pair_physical_device', {
-        tracker_id: trackerId,
-        device_uuid: deviceId,
+        tracker_id: trackerId, 
+        device_uuid: deviceId, 
         device_name: deviceName || 'ESP32 Tracker',
         device_model: 'ESP32'
       });

@@ -1,4 +1,4 @@
-import { Platform, Alert } from 'react-native';
+import { Platform, Alert, PermissionsAndroid } from 'react-native';
 import base64 from './bluetoothBase64'; // Using our custom base64 implementation
 import { v4 as uuidv4 } from './uuidGenerator'; // Using our custom UUID implementation
 
@@ -50,8 +50,8 @@ const isBleAvailable = () => {
   
   // Try to dynamically import the BLE module
   try {
-    require('react-native-ble-plx');
-    return true;
+    const BleModule = require('react-native-ble-plx');
+    return BleModule && typeof BleModule.BleManager === 'function';
   } catch (error) {
     console.log('BLE module not available:', error);
     return false;
@@ -78,7 +78,7 @@ class BluetoothService {
   private manager: any;
   private device: any = null;
   private isScanning = false;
-  private bleAvailable = false;
+  public bleAvailable = false;
   
   constructor() {
     this.bleAvailable = isBleAvailable();
@@ -95,6 +95,11 @@ class BluetoothService {
     } else {
       console.log('BLE not available, using mock implementation');
     }
+  }
+  
+  // Check if Bluetooth is available (can be called from other components)
+  isBleAvailable(): boolean {
+    return this.bleAvailable;
   }
   
   // Request permissions (Android only)

@@ -58,8 +58,12 @@ void setup() {
   
   // Load configuration
   loadConfig();
-  Serial.println("Config loaded");
   
+  if (strlen(config.device_id) > 0 && config.device_id[0] != '\0' && config.device_id[0] != 255) {
+    deviceId = String(config.device_id);
+    Serial.print("Using device ID: ");
+    Serial.println(deviceId);
+  } 
   // Show device ID
   if (strlen(config.device_id) > 0 && config.device_id[0] != '\0' && config.device_id[0] != 255) {
     deviceId = String(config.device_id);
