@@ -7,7 +7,7 @@ struct DeviceConfig {
   char wifi_password[32];
   char device_id[37]; // UUID string
   char api_endpoint[100];
-  char api_key[100];
+  char api_key[200]; // Increased to 200
   bool paired;
   int transmit_interval; // in seconds
   float motion_threshold;
@@ -16,52 +16,57 @@ struct DeviceConfig {
 void setup() {
   Serial.begin(115200);
   delay(1000);
-  Serial.println("\n\nFIND Tracker - ID Setup");
+  Serial.println("\n\nFIND Tracker - Advanced Diagnostic");
   
   // Initialize EEPROM
   EEPROM.begin(512);
   
-  // Create a new configuration
-  DeviceConfig newConfig;
-  
-  // Clear the entire structure first
-  memset(&newConfig, 0, sizeof(DeviceConfig));
-  
-  // Set device ID - being careful with string lengths
-  const char* id = "FIND-BANDUNG-ITB-TRACK-2025-v1";
-  strncpy(newConfig.device_id, id, 36);
-  newConfig.device_id[36] = '\0'; // Ensure null termination
-  
-  // Set API endpoint - being careful with string lengths
-  const char* endpoint = "https://hxdurjngbkfnbryzczau.supabase.co/rest/v1/rpc/update_device_status";
-  strncpy(newConfig.api_endpoint, endpoint, 99);
-  newConfig.api_endpoint[99] = '\0'; // Ensure null termination
-  
-  // Set API key - being careful with string lengths
-  const char* key = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZHVyam5nYmtmbmJyeXpjemF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMzIwOTIsImV4cCI6MjA2MDYwODA5Mn0.goPuYbHra2eHKSFidqYMiDbJ5KlYF3WLr0KGqSt62Xw";
-  strncpy(newConfig.api_key, key, 99);
-  newConfig.api_key[99] = '\0'; // Ensure null termination
-  
-  // Set other configuration values
-  newConfig.transmit_interval = 60;
-  newConfig.motion_threshold = 0.5;
-  
-  // Save to EEPROM
-  EEPROM.put(0, newConfig);
-  bool success = EEPROM.commit();
+  // Read current config
+  DeviceConfig config;
+  EEPROM.get(0, config);
   EEPROM.end();
   
-  // Print status
-  if (success) {
-    Serial.println("✅ Configuration saved successfully");
-    Serial.println("Device ID: " + String(newConfig.device_id));
-    Serial.println("Now upload the regular FIND_Tracker.ino sketch");
-  } else {
-    Serial.println("❌ Failed to save configuration");
+  // Display configuration
+  Serial.println("Current Configuration:");
+  Serial.println("-----------------------");
+  Serial.println("Device ID: " + String(config.device_id));
+  Serial.println("WiFi SSID: " + String(config.wifi_ssid));
+  Serial.println("API Endpoint: " + String(config.api_endpoint));
+  
+  // Show detailed API key information
+  Serial.println("\nAPI Key (examine closely):");
+  Serial.println("---------------------------------");
+  String apiKey = String(config.api_key);
+  Serial.println(apiKey);
+  
+  Serial.println("\nAPI Key length: " + String(apiKey.length()));
+  Serial.println("First 20 chars: " + apiKey.substring(0, 20));
+  Serial.println("Middle 20 chars: " + apiKey.substring(80, 100));
+  Serial.println("Last 20 chars: " + apiKey.substring(apiKey.length() - 20));
+  
+  // Compare with the expected key
+  const char* expectedKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZHVyam5nYmtmbmJyeXpjemF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMzIwOTIsImV4cCI6MjA2MDYwODA5Mn0.goPuYbHra2eHKSFidqYMiDbJ5KlYF3WLr0KGqSt62Xw";
+  Serial.println("\nExpected key length: " + String(strlen(expectedKey)));
+  
+  Serial.println("\nComparing characters:");
+  for (int i = 0; i < min(strlen(expectedKey), apiKey.length()); i += 20) {
+    String storedSection = apiKey.substring(i, min(i + 20, apiKey.length()));
+    String expectedSection = String(expectedKey).substring(i, min(i + 20, strlen(expectedKey)));
+    
+    Serial.print("Position " + String(i) + ": ");
+    if (storedSection.equals(expectedSection)) {
+      Serial.println("MATCH");
+    } else {
+      Serial.println("MISMATCH");
+      Serial.println("  Stored: " + storedSection);
+      Serial.println("  Expected: " + expectedSection);
+    }
   }
+  
+  Serial.println("\nPaired: " + String(config.paired ? "Yes" : "No"));
+  Serial.println("Transmit Interval: " + String(config.transmit_interval) + " seconds");
 }
 
 void loop() {
-  // Just wait
-  delay(2000);
+  delay(1000);
 }

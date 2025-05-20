@@ -58,7 +58,7 @@ void setup() {
   
   // Load configuration
   loadConfig();
-  
+
   if (strlen(config.device_id) > 0 && config.device_id[0] != '\0' && config.device_id[0] != 255) {
     deviceId = String(config.device_id);
     Serial.print("Using device ID: ");
@@ -316,16 +316,12 @@ void transmitData() {
   // Create JSON document
   DynamicJsonDocument doc(1024);
   
-  // Basic device info
-  doc["device_uuid"] = config.device_id;
+  // Key change: Make sure we use the exact parameter names expected by the function
+  doc["device_uuid"] = config.device_id;  // Keep as device_uuid to match function parameter
+  doc["latitude"] = latitude;
+  doc["longitude"] = longitude;
+  doc["accuracy"] = hdop * 5.0;
   doc["battery_level"] = batteryLevel;
-  
-  // Location data (only if we have a GPS fix)
-  if (hasGpsFix) {
-    doc["latitude"] = latitude;
-    doc["longitude"] = longitude;
-    doc["accuracy"] = hdop * 5.0; // Rough estimate of accuracy in meters
-  }
   
   // Motion data
   JsonObject motion = doc.createNestedObject("motion_data");
@@ -345,14 +341,39 @@ void transmitData() {
   Serial.print("Transmitting data: ");
   Serial.println(jsonString);
   
-  // Send to server
+  // Send to server with hardcoded API key
   HTTPClient http;
-  http.begin(config.api_endpoint);
-  http.addHeader("Content-Type", "application/json");
-  http.addHeader("Authorization", String("Bearer ") + config.api_key);
-  http.setConnectTimeout(API_TIMEOUT_MS);
   
+  // Set shorter timeouts
+  http.setConnectTimeout(5000);  // 5 seconds connect timeout
+  http.setTimeout(10000);        // 10 seconds response timeout
+  
+  Serial.println("Beginning HTTP connection...");
+  
+  // Begin the connection with more error checking
+  if (!http.begin(config.api_endpoint)) {
+    Serial.println("Error: Failed to initialize HTTP connection");
+    return;
+  }
+  
+  Serial.println("HTTP connection initialized");
+  
+  // Define the hardcoded API key
+  const char* hardcodedKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZHVyam5nYmtmbmJyeXpjemF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMzIwOTIsImV4cCI6MjA2MDYwODA5Mn0.goPuYbHra2eHKSFidqYMiDbJ5KlYF3WLr0KGqSt62Xw";
+  
+  // Add headers using the hardcoded key
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("apikey", hardcodedKey);
+  http.addHeader("Authorization", "Bearer " + String(hardcodedKey));
+  
+  Serial.println("Using hardcoded API key for authentication");
+  Serial.println("Sending POST request...");
+  
+  unsigned long startTime = millis();
   int httpCode = http.POST(jsonString);
+  unsigned long endTime = millis();
+  
+  Serial.println("POST request completed in " + String(endTime - startTime) + "ms");
   
   if (httpCode > 0) {
     String payload = http.getString();
@@ -360,9 +381,13 @@ void transmitData() {
     Serial.println("Response: " + payload);
   } else {
     Serial.println("Error on HTTP request: " + String(httpCode));
+    Serial.println("Error description: " + http.errorToString(httpCode));
   }
   
+  Serial.println("Ending HTTP connection");
   http.end();
+  
+  Serial.println("HTTP connection closed");
   
   // Update last transmit time
   lastTransmitTime = millis();

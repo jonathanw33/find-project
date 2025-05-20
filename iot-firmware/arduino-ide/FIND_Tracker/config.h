@@ -20,7 +20,7 @@ struct DeviceConfig {
   char wifi_password[32];
   char device_id[37]; // UUID string
   char api_endpoint[100];
-  char api_key[100];
+  char api_key[200];
   bool paired;
   int transmit_interval; // in seconds
   float motion_threshold;
