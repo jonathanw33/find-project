@@ -236,6 +236,10 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
       });
       
       dispatch(updateTrackerLocation({ id, location }));
+      
+      // Check for geofence crossings after updating the location
+      const { clientAlertChecker } = await import('../services/clientAlertChecker');
+      clientAlertChecker.checkGeofences(id, location.latitude, location.longitude);
     } catch (error) {
       dispatch(setTrackerError((error as Error).message));
       throw error;
@@ -261,7 +265,7 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     
     let centerLat = startLocation.latitude;
     let centerLng = startLocation.longitude;
-    let radius = options.radius || 0.001; // About 100m
+    let radius = options.radius || 0.0005; // About A smaller value (50m) for better geofence testing
     let angle = 0;
     let direction = options.direction || 0; // Radians
     let speed = options.speed || 0.00005; // About 5m per update

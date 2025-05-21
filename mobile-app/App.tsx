@@ -1,120 +1,106 @@
-import 'react-native-url-polyfill/auto';
-import 'react-native-get-random-values'; // Required for UUID generation
-
-// Fix for fetch timeout issues with Supabase
-import { Platform, LogBox, AppRegistry, StyleSheet, View, Alert } from 'react-native';
-if (Platform.OS !== 'web') {
-  // Timeout fix for React Native
-  const originalFetch = global.fetch;
-  global.fetch = (url, options = {}) => {
-    return originalFetch(url, {
-      ...options,
-      // Add a longer timeout
-      timeout: 60000, // 60 seconds
-    });
-  };
-  
-  // Disable HMR to fix "Cannot read property 'prototype' of null" error
-  if (__DEV__ && typeof global.HermesInternal === 'object') {
-    (global as any).HMRClient = null;
-  }
-}
-
-// Initialize Supabase early
-import { createClient } from '@supabase/supabase-js';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Pre-initialize supabase for use elsewhere
-try {
-  console.log('Initializing Supabase in App.tsx...');
-  const supabaseUrl = 'https://hxdurjngbkfnbryzczau.supabase.co';
-  const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh4ZHVyam5nYmtmbmJyeXpjemF1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDUwMzIwOTIsImV4cCI6MjA2MDYwODA5Mn0.goPuYbHra2eHKSFidqYMiDbJ5KlYF3WLr0KGqSt62Xw';
-
-  // Make the supabase client globally available
-  (global as any).supabaseClient = createClient(supabaseUrl, supabaseKey, {
-    auth: {
-      storage: AsyncStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
-    realtime: {
-      enabled: false,
-    },
-  });
-  
-  console.log('Supabase initialized successfully in App.tsx');
-} catch (error) {
-  console.error('Error initializing Supabase in App.tsx:', error);
-}
-
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
+import { Provider } from 'react-redux';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { Provider as ReduxProvider } from 'react-redux';
+import AppNavigator from './src/navigation';
+import { store } from './src/redux/store';
+import { GeofenceProvider } from './src/context/GeofenceContext';
+import { ScheduledAlertProvider } from './src/context/ScheduledAlertContext';
 import { AuthProvider } from './src/context/AuthContext';
 import { TrackerProvider } from './src/context/TrackerContext';
 import { AlertProvider } from './src/context/AlertContext';
-import Navigation from './src/navigation';
-import { store } from './src/redux/store';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import clientAlertChecker from './src/services/clientAlertChecker';
+import { useSelector } from 'react-redux';
+import { RootState } from './src/redux/store';
+import { AppState, AppStateStatus } from 'react-native';
 
-// Ignore warnings that we can't fix
-LogBox.ignoreLogs([
-  "Cannot read property 'install' of null",
-  "Unsupported top level event type \"topInsetsChange\" dispatched",
-  "RCTBridge required dispatch_sync to load RNGestureHandlerModule",
-  "Cannot read property 'bubblingEventTypes' of null",
-  "MapMarker",
-  "AIRGoogleMapMarker"
-]);
+// Separate component for alert checking to have access to Redux
+const AlertChecker: React.FC = () => {
+  const { user } = useSelector((state: RootState) => state.auth);
+  const { trackers } = useSelector((state: RootState) => state.trackers);
+  
+  // Check scheduled alerts when app becomes active
+  useEffect(() => {
+    if (!user) return;
+    
+    // Check on mount
+    checkAlerts();
+    
+    // Set up app state listener
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    
+    // Set up interval for regular checks while app is open
+    const interval = setInterval(() => {
+      clientAlertChecker.checkScheduledAlerts();
+    }, 60000); // Every minute
+    
+    return () => {
+      subscription.remove();
+      clearInterval(interval);
+    };
+  }, [user]);
+  
+  // Check alerts when trackers are updated
+  useEffect(() => {
+    if (!user || !trackers || Object.keys(trackers).length === 0) return;
+    
+    // Check geofences for each tracker with a location
+    Object.values(trackers).forEach(tracker => {
+      if (tracker?.last_seen_latitude && tracker?.last_seen_longitude) {
+        clientAlertChecker.checkGeofences(
+          tracker.id,
+          tracker.last_seen_latitude,
+          tracker.last_seen_longitude
+        );
+      }
+    });
+  }, [trackers, user]);
+  
+  const handleAppStateChange = (state: AppStateStatus) => {
+    if (state === 'active') {
+      checkAlerts();
+    }
+  };
+  
+  const checkAlerts = () => {
+    // Check scheduled alerts
+    clientAlertChecker.checkScheduledAlerts();
+    
+    // Check geofences for each tracker
+    if (trackers && Object.keys(trackers).length > 0) {
+      Object.values(trackers).forEach(tracker => {
+        if (tracker?.last_seen_latitude && tracker?.last_seen_longitude) {
+          clientAlertChecker.checkGeofences(
+            tracker.id,
+            tracker.last_seen_latitude,
+            tracker.last_seen_longitude
+          );
+        }
+      });
+    }
+  };
+  
+  return null; // This component doesn't render anything
+};
 
 export default function App() {
-  // Test Supabase connection on app start
-  useEffect(() => {
-    const testSupabase = async () => {
-      try {
-        console.log('Testing Supabase connection...');
-        
-        // Try to import the Supabase client
-        const { supabase } = require('./src/services/supabase');
-        
-        // Try a simple auth operation
-        const { data, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Supabase connection test error:', error);
-        } else {
-          console.log('Supabase connection test successful', data?.session ? 'Session active' : 'No active session');
-        }
-      } catch (error) {
-        console.error('Error testing Supabase:', error);
-      }
-    };
-    
-    testSupabase();
-  }, []);
-
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <ReduxProvider store={store}>
-        <SafeAreaProvider>
-          <AuthProvider>
-            <TrackerProvider>
-              <AlertProvider>
-                <Navigation />
-                <StatusBar style="auto" />
-              </AlertProvider>
-            </TrackerProvider>
-          </AuthProvider>
-        </SafeAreaProvider>
-      </ReduxProvider>
-    </GestureHandlerRootView>
+    <Provider store={store}>
+      <SafeAreaProvider>
+        <StatusBar style="auto" />
+        <AuthProvider>
+          <TrackerProvider>
+            <AlertProvider>
+              <GeofenceProvider>
+                <ScheduledAlertProvider>
+                  <AlertChecker />
+                  <AppNavigator />
+                </ScheduledAlertProvider>
+              </GeofenceProvider>
+            </AlertProvider>
+          </TrackerProvider>
+        </AuthProvider>
+      </SafeAreaProvider>
+    </Provider>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1
-  }
-});

@@ -17,6 +17,9 @@ import { RootState } from '../../redux/store';
 import { useTracker } from '../../context/TrackerContext';
 import { useSupabaseTrackers } from '../../hooks/useSupabaseTrackers';
 import { useAlert } from '../../context/AlertContext';
+import { useGeofence } from '../../context/GeofenceContext';
+import { useScheduledAlert } from '../../context/ScheduledAlertContext';
+import clientAlertChecker from '../../services/clientAlertChecker';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MainStackParamList } from '../../navigation';
@@ -53,18 +56,52 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
   const { startTrackerSimulation, stopTrackerSimulation } = useTracker();
   const { updateTrackerDetails: supabaseUpdateTrackerDetails, updateLocation, fetchTrackerHistory } = useSupabaseTrackers();
   const { simulateLeftBehindAlert } = useAlert();
+  const { getLinkedGeofences } = useGeofence();
+  const { getScheduledAlertsForTracker } = useScheduledAlert();
+  
   const [loading, setLoading] = useState(false);
   const [showLocationHistory, setShowLocationHistory] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
   const [simulationPattern, setSimulationPattern] = useState<'random' | 'circle' | 'line'>('random');
+  const [linkedGeofences, setLinkedGeofences] = useState([]);
+  const [scheduledAlerts, setScheduledAlerts] = useState([]);
   const mapRef = useRef<MapView>(null);
 
   // Load location history when component mounts
   useEffect(() => {
     if (tracker) {
       fetchTrackerHistory(tracker.id);
+      loadAdvancedAlertData();
     }
   }, [tracker?.id]);
+  
+  // Check for geofence events when tracker location updates
+  useEffect(() => {
+    if (tracker?.lastSeen && tracker?.id) {
+      // Check if the tracker has crossed any geofences
+      clientAlertChecker.checkGeofences(
+        tracker.id, 
+        tracker.lastSeen.latitude, 
+        tracker.lastSeen.longitude
+      );
+    }
+  }, [tracker?.lastSeen?.latitude, tracker?.lastSeen?.longitude]);
+  
+  const loadAdvancedAlertData = async () => {
+    if (!tracker) return;
+    
+    try {
+      // Load geofences
+      const geofences = await getLinkedGeofences(tracker.id);
+      setLinkedGeofences(geofences);
+      
+      // Load scheduled alerts
+      const alerts = await getScheduledAlertsForTracker(tracker.id);
+      setScheduledAlerts(alerts);
+    } catch (error) {
+      console.error("Error loading advanced alert data:", error);
+    }
+  };
 
   const [region, setRegion] = useState<Region>(() => {
     if (tracker?.lastSeen) {
@@ -640,6 +677,41 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
             </TouchableOpacity>
           </View>
         )}
+        
+        {/* Advanced Alerts Section */}
+        <View style={advancedAlertStyles.advancedAlertSection}>
+          <Text style={styles.sectionTitle}>Advanced Alerts</Text>
+          
+          <TouchableOpacity 
+            style={advancedAlertStyles.alertTypeButton}
+            onPress={() => navigation.navigate('TrackerGeofences', { trackerId: tracker.id })}
+          >
+            <Ionicons name="map-outline" size={24} color="#007AFF" />
+            <View style={advancedAlertStyles.alertTypeInfo}>
+              <Text style={advancedAlertStyles.alertTypeName}>Geofence Alerts</Text>
+              <Text style={advancedAlertStyles.alertTypeDesc}>
+                Get notified when the tracker enters or exits specific areas
+              </Text>
+            </View>
+            <Text style={advancedAlertStyles.alertCount}>{linkedGeofences.length}</Text>
+            <Ionicons name="chevron-forward" size={16} color="#999" />
+          </TouchableOpacity>
+          
+          <TouchableOpacity 
+            style={advancedAlertStyles.alertTypeButton}
+            onPress={() => navigation.navigate('TrackerScheduledAlerts', { trackerId: tracker.id })}
+          >
+            <Ionicons name="time-outline" size={24} color="#FF9500" />
+            <View style={advancedAlertStyles.alertTypeInfo}>
+              <Text style={advancedAlertStyles.alertTypeName}>Scheduled Alerts</Text>
+              <Text style={advancedAlertStyles.alertTypeDesc}>
+                Time-based reminders and notifications
+              </Text>
+            </View>
+            <Text style={advancedAlertStyles.alertCount}>{scheduledAlerts.length}</Text>
+            <Ionicons name="chevron-forward" size={16} color="#999" />
+          </TouchableOpacity>
+        </View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -900,6 +972,53 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     marginLeft: 8,
+  },
+});
+
+// Add additional styles for advanced alerts
+const advancedAlertStyles = StyleSheet.create({
+  advancedAlertSection: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  alertTypeButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  alertTypeInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  alertTypeName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  alertTypeDesc: {
+    fontSize: 14,
+    color: '#777',
+    marginTop: 2,
+  },
+  alertCount: {
+    backgroundColor: '#EEE',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    fontSize: 14,
+    color: '#555',
+    marginRight: 8,
   },
 });
 

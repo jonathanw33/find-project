@@ -145,6 +145,20 @@ const ProfileScreen: React.FC = () => {
             <Ionicons name="chevron-forward" size={20} color="#999" />
           </TouchableOpacity>
           
+          <TouchableOpacity
+            style={styles.optionItem}
+            onPress={() => navigation.navigate('Geofences')}
+          >
+            <View style={styles.optionIconContainer}>
+              <Ionicons name="map-outline" size={24} color="#007AFF" />
+            </View>
+            <View style={styles.optionContent}>
+              <Text style={styles.optionTitle}>Manage Geofences</Text>
+              <Text style={styles.optionDescription}>View, create and manage all your geofences</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#999" />
+          </TouchableOpacity>
+          
           <TouchableOpacity style={styles.optionItem}>
             <View style={styles.optionIconContainer}>
               <Ionicons name="help-circle-outline" size={24} color="#007AFF" />

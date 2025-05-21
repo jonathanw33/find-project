@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -27,6 +27,34 @@ const SettingsScreen: React.FC = () => {
   const [leftBehindAlerts, setLeftBehindAlerts] = useState(true);
   const [lowBatteryAlerts, setLowBatteryAlerts] = useState(true);
   const [movementAlerts, setMovementAlerts] = useState(false);
+  
+  // Load saved settings on component mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        // Load notification settings
+        const movementAlertsSetting = await AsyncStorage.getItem('setting_movement_alerts');
+        if (movementAlertsSetting !== null) {
+          setMovementAlerts(movementAlertsSetting === 'true');
+        }
+        
+        // Load other settings as needed
+      } catch (error) {
+        console.error('Error loading settings:', error);
+      }
+    };
+    
+    loadSettings();
+  }, []);
+  
+  // Save settings when they change
+  const saveSettings = async (key: string, value: boolean) => {
+    try {
+      await AsyncStorage.setItem(`setting_${key}`, value.toString());
+    } catch (error) {
+      console.error('Error saving setting:', error);
+    }
+  };
   
   // Privacy settings
   const [locationHistory, setLocationHistory] = useState(true);
@@ -131,7 +159,11 @@ const SettingsScreen: React.FC = () => {
           {renderSwitchSetting(
             'Movement Alerts',
             movementAlerts,
-            setMovementAlerts
+            (value) => {
+              setMovementAlerts(value);
+              saveSettings('movement_alerts', value);
+            },
+            'Receive alerts when trackers move across geofences'
           )}
         </View>
         
