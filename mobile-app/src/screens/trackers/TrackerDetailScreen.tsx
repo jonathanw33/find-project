@@ -44,13 +44,9 @@ const defaultRegion = {
 const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, navigation }) => {
   const { trackerId } = route.params;
   
-  // Add super detailed logging at the beginning
-  console.log(`--- TrackerDetailScreen RENDER START (Tracker ID: ${trackerId}) ---`);
-  
+  // Minimal logging for debugging
   const { trackers } = useSelector((state: RootState) => state.trackers);
   const tracker = trackers[trackerId];
-  
-  console.log('Tracker from Redux:', JSON.stringify(tracker, null, 2));
   
   const dispatch = useDispatch(); // Kept if other dispatches are needed later
   const { startTrackerSimulation, stopTrackerSimulation } = useTracker();
@@ -122,7 +118,9 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
       return;
     }
 
-    console.log(`TrackerDetailScreen - useEffect [tracker] fired. Tracker name: ${tracker.name}`);
+    if (process.env.NODE_ENV === 'development' && false) { // Set to true to enable tracker update logs
+      console.log(`Tracker update: ${tracker.name}`);
+    }
     navigation.setOptions({ title: tracker.name });
 
     // Don't update the region or do major animations if we're in simulation mode
@@ -148,7 +146,10 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
       const newLatitude = tracker.lastSeen.latitude;
       const newLongitude = tracker.lastSeen.longitude;
 
-      console.log(`TrackerDetailScreen - useEffect: Valid lastSeen. Lat: ${newLatitude}, Lon: ${newLongitude}. Current region state before setRegion:`, JSON.stringify(region));
+      // Log region state if in dev mode
+      if (process.env.NODE_ENV === 'development' && false) { // Set to true to enable location logs
+        console.log(`Tracker location: ${newLatitude}, ${newLongitude}`);
+      }
 
       const newMapRegion = {
         latitude: newLatitude,
@@ -335,19 +336,17 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
     });
   };
 
-  // Log before rendering
-  console.log('TrackerDetailScreen - Before Map Container Render. Current Region State:', JSON.stringify(region));
-  if (tracker) {
-    console.log('TrackerDetailScreen - Before Map Container Render. Tracker.lastSeen:', JSON.stringify(tracker.lastSeen, null, 2));
-    if (tracker.lastSeen) {
-      console.log('TrackerDetailScreen - Marker Coords would be:', tracker.lastSeen.latitude, tracker.lastSeen.longitude);
-      console.log('TrackerDetailScreen - Types:', typeof tracker.lastSeen.latitude, typeof tracker.lastSeen.longitude);
-    } else {
-      console.log('TrackerDetailScreen - NO tracker.lastSeen to render marker with.');
+  // Simplified logging before rendering
+  const logInfo = () => {
+    if (process.env.NODE_ENV === 'development' && false) { // Set to true to enable detailed map logs
+      console.log(`TrackerDetailScreen - Region: ${JSON.stringify(region)}`);
+      if (tracker?.lastSeen) {
+        console.log(`TrackerDetailScreen - Marker at: ${tracker.lastSeen.latitude}, ${tracker.lastSeen.longitude}`);
+      }
     }
-  } else {
-    console.log('TrackerDetailScreen - NO tracker object AT ALL before map container.');
   }
+  
+  logInfo();
 
   if (!tracker) { // This check handles the case where tracker might be undefined initially
     return (
@@ -366,10 +365,6 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
       <View style={styles.mapContainer}>
       {tracker && tracker.lastSeen ? ( // Ensure tracker and lastSeen are present
         <>
-          {(() => {
-            console.log('TrackerDetailScreen - RENDERING MapView. Region prop:', JSON.stringify(region));
-            return null;
-          })()}
           <MapView
             ref={mapRef}
             style={styles.map}
@@ -378,7 +373,9 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
             // This prevents the map from resetting its view during simulation
             region={!isSimulating ? region : undefined}
             onMapReady={() => {
-              console.log("TrackerDetailScreen - Map is READY!");
+              if (process.env.NODE_ENV === 'development') {
+                console.log("Map ready for tracker:", tracker.name);
+              }
               // Force a fit to marker on map ready
               setTimeout(() => {
                 if (mapRef.current && tracker.lastSeen) {
@@ -399,11 +396,6 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
             zoomEnabled={true}
             rotateEnabled={true}
           >
-            {(() => {
-              console.log(`TrackerDetailScreen - RENDERING Marker for ${tracker.name}. Coords: Lng ${tracker.lastSeen.longitude}, Lat ${tracker.lastSeen.latitude}`);
-              return null;
-            })()}
-            
             {/* ORIGINAL MARKER WITH TRACKER DATA - MAIN MARKER */}
             <Marker
               // Don't change the key during simulation to prevent marker redraws

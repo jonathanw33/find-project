@@ -270,7 +270,8 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
     let direction = options.direction || 0; // Radians
     let speed = options.speed || 0.00005; // About 5m per update
     
-    console.log(`Starting ${pattern} simulation for tracker ${id}, starting at:`, startLocation);
+    // Only log for user feedback, but keep it minimal
+    console.log(`Started ${pattern} simulation for "${trackers[id]?.name || id}"`);
     
     // Immediately update the tracker location to ensure it's set
     moveVirtualTracker(id, {
@@ -310,7 +311,11 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
         timestamp: Date.now(),
       };
       
-      console.log(`Simulation update for tracker ${id}:`, newLocation);
+      // Verbose logging would just clutter the console, only enable for debugging
+      if (process.env.NODE_ENV === 'development' && false) { // Set to true for detailed simulation logs
+        console.log(`Simulation update: ${newLat.toFixed(6)}, ${newLng.toFixed(6)}`);
+      }
+      
       moveVirtualTracker(id, newLocation);
     }, 2000); // Update every 2 seconds (faster for better visual effect)
   };

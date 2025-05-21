@@ -9,7 +9,10 @@ export const clientAlertChecker = {
       // First check if movement alerts are enabled
       const movementAlertsSetting = await AsyncStorage.getItem('setting_movement_alerts');
       if (movementAlertsSetting !== 'true') {
-        console.log('Movement alerts are disabled. Skipping geofence check.');
+        // Only log this in development and when verbose logging is enabled
+        if (process.env.NODE_ENV === 'development' && false) { // Set to true for verbose geofence logs
+          console.log('Movement alerts are disabled. Skipping geofence check.');
+        }
         return;
       }
 
@@ -32,7 +35,12 @@ export const clientAlertChecker = {
       
       if (error) throw error;
       
-      console.log(`Checking ${linkedGeofences?.length || 0} geofences for tracker ${trackerId}`);
+      // Only log geofence checks if there are linked geofences (and keep it concise)
+      const geofenceCount = linkedGeofences?.length || 0;
+      if (geofenceCount > 0 && process.env.NODE_ENV === 'development') {
+        // Only log minimal information to reduce console clutter
+        console.log(`⚙️ Checking ${geofenceCount} geofences for tracker ${trackerId}`);
+      }
       
       for (const item of linkedGeofences || []) {
         const geofence = item.geofences;
@@ -53,15 +61,19 @@ export const clientAlertChecker = {
         const prevStateStr = await AsyncStorage.getItem(storageKey);
         const wasInside = prevStateStr ? JSON.parse(prevStateStr) : false;
         
-        console.log(`Geofence ${geofence.name}: distance=${distance}, radius=${geofence.radius}, isInside=${isInside}, wasInside=${wasInside}`);
+        // Only log if there's a state change to reduce console clutter
+        const stateChanged = isInside !== wasInside;
+        if (stateChanged || process.env.NODE_ENV === 'development' && false) { // Set to true for verbose logging
+          console.log(`Geofence ${geofence.name}: distance=${Math.round(distance)}m, radius=${geofence.radius}m, inside=${isInside}, was_inside=${wasInside}`);
+        }
         
         // Check for enter/exit events
         if (item.alert_on_enter && isInside && !wasInside) {
-          console.log(`Creating ENTER alert for tracker ${trackerId} in geofence ${geofence.name}`);
+          console.log(`🟢 ALERT: Tracker entered geofence "${geofence.name}"`);
           // Create enter alert
           await this.createGeofenceAlert(trackerId, geofence.id, 'enter');
         } else if (item.alert_on_exit && !isInside && wasInside) {
-          console.log(`Creating EXIT alert for tracker ${trackerId} in geofence ${geofence.name}`);
+          console.log(`🔴 ALERT: Tracker exited geofence "${geofence.name}"`);
           // Create exit alert
           await this.createGeofenceAlert(trackerId, geofence.id, 'exit');
         }
