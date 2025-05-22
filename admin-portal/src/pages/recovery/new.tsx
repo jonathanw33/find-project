@@ -11,12 +11,15 @@ import {
   CheckCircle, 
   ArrowLeft, 
   Loader, 
-  X
+  X,
+  MapPin
 } from 'lucide-react';
 import AdminLayout from '@/layouts/AdminLayout';
 import { supabase } from '@/utils/supabase';
 import { TrackerWithUserInfo } from '@/types/supabase';
 import { createShippingRequest } from '@/services/logisticsService';
+import AddressAutocomplete from '@/components/ui/AddressAutocomplete';
+import { isValidAddress, getAddressValidationMessage } from '@/utils/addressUtils';
 
 const NewRecoveryRequest: React.FC = () => {
   const router = useRouter();
@@ -94,6 +97,13 @@ const NewRecoveryRequest: React.FC = () => {
 
     if (!shippingAddress.trim()) {
       setError('Please enter a shipping address');
+      return;
+    }
+
+    // Validate address format
+    const addressValidationMessage = getAddressValidationMessage(shippingAddress);
+    if (addressValidationMessage) {
+      setError(addressValidationMessage);
       return;
     }
 
@@ -256,15 +266,33 @@ const NewRecoveryRequest: React.FC = () => {
                   <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-2">
                     Shipping Address
                   </label>
-                  <textarea
-                    id="address"
+                  <AddressAutocomplete
                     value={shippingAddress}
-                    onChange={(e) => setShippingAddress(e.target.value)}
-                    rows={3}
-                    className="input-field"
-                    placeholder="Enter the full shipping address"
-                    required
+                    onChange={setShippingAddress}
+                    placeholder="Start typing the shipping address..."
+                    disabled={submitting}
                   />
+                  
+                  {/* Address validation feedback */}
+                  {shippingAddress && (
+                    <div className="mt-2 flex items-center text-xs">
+                      {isValidAddress(shippingAddress) ? (
+                        <div className="flex items-center text-green-600">
+                          <CheckCircle className="h-4 w-4 mr-1" />
+                          <span>Address looks good</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center text-amber-600">
+                          <AlertTriangle className="h-4 w-4 mr-1" />
+                          <span>Please enter a complete address with street, city, and country</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  <p className="mt-2 text-xs text-gray-500">
+                    Start typing to search for addresses. Select from the dropdown for accurate delivery.
+                  </p>
                 </div>
                 
                 {/* Notes */}
