@@ -9,6 +9,7 @@ import {
 import AdminLayout from '@/layouts/AdminLayout';
 import { supabase } from '@/utils/supabase';
 import { TrackerWithUserInfo, UserWithTrackersCount } from '@/types/supabase';
+import DashboardAnalytics from '@/components/dashboard/DashboardAnalytics';
 
 const Dashboard: React.FC = () => {
   const [usersCount, setUsersCount] = useState<number>(0);
@@ -246,6 +247,26 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           </div>
+        </div>
+
+        {/* Analytics Charts Section */}
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Analytics & Insights</h2>
+              <p className="text-gray-600">Comprehensive data visualization and trends analysis</p>
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => window.location.reload()}
+                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Refresh Data
+              </button>
+            </div>
+          </div>
+          <DashboardAnalytics className="mb-8" />
         </div>
 
         {/* Quick Action Links */}
