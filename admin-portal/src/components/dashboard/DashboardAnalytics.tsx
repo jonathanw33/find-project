@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/utils/supabase';
-import TrackerStatusChart from './TrackerStatusChart';
+import TrackerTypesChart from './TrackerTypesChart';
 import UserActivityTimeline from './UserActivityTimeline';
 import AlertTrendsChart from './AlertTrendsChart';
 import { format, subDays, startOfDay, endOfDay } from 'date-fns';
@@ -11,10 +11,9 @@ interface DashboardAnalyticsProps {
 
 const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({ className = '' }) => {
   const [loading, setLoading] = useState(true);
-  const [trackerStats, setTrackerStats] = useState({
-    connected: 0,
-    disconnected: 0,
-    lowBattery: 0,
+  const [trackerTypes, setTrackerTypes] = useState({
+    physical: 0,
+    virtual: 0,
   });
 
   const [userActivity, setUserActivity] = useState<{
@@ -36,11 +35,11 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({ className = '' 
     const fetchAnalyticsData = async () => {
       setLoading(true);
       try {
-        // Fetch real tracker stats from Supabase
-        console.log('Fetching tracker stats...');
+        // Fetch real tracker data from Supabase
+        console.log('Fetching tracker data...');
         const { data: trackers, error: trackersError } = await supabase
           .from('trackers')
-          .select('connection_status, battery_level, created_at, is_active');
+          .select('type, created_at, is_active');
 
         if (trackersError) {
           console.error('Error fetching trackers:', trackersError);
@@ -49,18 +48,15 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({ className = '' 
 
         if (trackers) {
           console.log('Found trackers:', trackers.length);
-          const connected = trackers.filter(t => t.connection_status === 'connected' && t.is_active).length;
-          const disconnected = trackers.filter(t => 
-            (t.connection_status === 'disconnected' || t.connection_status === 'unknown') && t.is_active
-          ).length;
-          const lowBattery = trackers.filter(t => 
-            t.battery_level !== null && t.battery_level < 20 && t.is_active
-          ).length;
           
-          setTrackerStats({
-            connected,
-            disconnected,
-            lowBattery,
+          // Count tracker types (only active trackers)
+          const activeTrackers = trackers.filter(t => t.is_active);
+          const physicalCount = activeTrackers.filter(t => t.type === 'physical').length;
+          const virtualCount = activeTrackers.filter(t => t.type === 'virtual').length;
+          
+          setTrackerTypes({
+            physical: physicalCount,
+            virtual: virtualCount,
           });
         }
 
@@ -186,7 +182,7 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({ className = '' 
         // If we can't fetch real data, show empty states instead of fake data
         setUserActivity([]);
         setAlertTrends([]);
-        setTrackerStats({ connected: 0, disconnected: 0, lowBattery: 0 });
+        setTrackerTypes({ physical: 0, virtual: 0 });
       } finally {
         setLoading(false);
       }
@@ -202,12 +198,11 @@ const DashboardAnalytics: React.FC<DashboardAnalyticsProps> = ({ className = '' 
 
   return (
     <div className={`space-y-6 ${className}`}>
-      {/* Top row: Tracker Status Chart takes full width or large prominence */}
+      {/* Top row: Tracker Types Chart takes full width or large prominence */}
       <div className="w-full">
-        <TrackerStatusChart
-          connected={trackerStats.connected}
-          disconnected={trackerStats.disconnected}
-          lowBattery={trackerStats.lowBattery}
+        <TrackerTypesChart
+          physicalCount={trackerTypes.physical}
+          virtualCount={trackerTypes.virtual}
           loading={loading}
         />
       </div>

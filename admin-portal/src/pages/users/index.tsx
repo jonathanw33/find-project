@@ -86,8 +86,8 @@ const UsersPage: React.FC = () => {
       const query = searchQuery.toLowerCase();
       result = result.filter(
         user =>
-          (user.name && user.name.toLowerCase().includes(query)) ||
-          user.email.toLowerCase().includes(query)
+          user.email.toLowerCase().includes(query) ||
+          user.id.toLowerCase().includes(query)
       );
     }
 
@@ -152,7 +152,7 @@ const UsersPage: React.FC = () => {
               </div>
               <input
                 type="text"
-                placeholder="Search users..."
+                placeholder="Search by email or user ID..."
                 className="input-field pl-10"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -180,8 +180,6 @@ const UsersPage: React.FC = () => {
               >
                 <option value="created_at-desc">Date Created (Newest)</option>
                 <option value="created_at-asc">Date Created (Oldest)</option>
-                <option value="name-asc">Name (A-Z)</option>
-                <option value="name-desc">Name (Z-A)</option>
                 <option value="email-asc">Email (A-Z)</option>
                 <option value="email-desc">Email (Z-A)</option>
                 <option value="trackers_count-desc">Trackers (Most-Least)</option>
@@ -225,7 +223,7 @@ const UsersPage: React.FC = () => {
                             {user.avatar_url ? (
                               <img 
                                 src={user.avatar_url}
-                                alt={user.name || 'User'} 
+                                alt={user.email} 
                                 className="h-10 w-10 rounded-full"
                               />
                             ) : (
@@ -233,12 +231,12 @@ const UsersPage: React.FC = () => {
                             )}
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900">
-                              {user.name || 'Unnamed User'}
-                            </div>
-                            <div className="text-sm text-gray-500 flex items-center">
-                              <Mail className="h-3 w-3 mr-1" />
+                            <div className="text-sm font-medium text-gray-900 flex items-center">
+                              <Mail className="h-4 w-4 mr-2 text-gray-400" />
                               {user.email}
+                            </div>
+                            <div className="text-sm text-gray-500">
+                              User ID: {user.id.slice(0, 8)}...
                             </div>
                           </div>
                         </div>
