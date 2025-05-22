@@ -7,6 +7,7 @@ import { RootState } from '../redux/store';
 import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, View } from 'react-native';
 import 'react-native-gesture-handler';
+import { theme } from '../theme';
 
 // Auth Screens
 import LoginScreen from '../screens/auth/LoginScreen';
@@ -107,8 +108,33 @@ const TabNavigator = () => {
 
           return <Ionicons name={iconName} size={size} color={color} />;
         },
-        tabBarActiveTintColor: '#007AFF',
-        tabBarInactiveTintColor: 'gray',
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.textMuted,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopWidth: 1,
+          borderTopColor: theme.colors.borderLight,
+          paddingBottom: theme.spacing.xs,
+          paddingTop: theme.spacing.xs,
+          height: 60,
+          ...theme.shadows.lg,
+        },
+        tabBarLabelStyle: {
+          fontSize: theme.typography.fontSize.sm,
+          fontWeight: theme.typography.fontWeight.medium,
+          marginBottom: theme.spacing.xs,
+        },
+        headerStyle: {
+          backgroundColor: theme.colors.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.borderLight,
+          ...theme.shadows.sm,
+        },
+        headerTitleStyle: {
+          fontSize: theme.typography.fontSize.xl,
+          fontWeight: theme.typography.fontWeight.bold,
+          color: theme.colors.textPrimary,
+        },
       })}
     >
       <Tab.Screen name="Map" component={MapScreen} />
@@ -123,7 +149,19 @@ const MainNavigator = () => {
   return (
     <MainStack.Navigator
       screenOptions={{
-        gestureEnabled: false // Disable gesture navigation
+        gestureEnabled: false,
+        headerStyle: {
+          backgroundColor: theme.colors.surface,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.borderLight,
+          ...theme.shadows.sm,
+        },
+        headerTitleStyle: {
+          fontSize: theme.typography.fontSize.lg,
+          fontWeight: theme.typography.fontWeight.bold,
+          color: theme.colors.textPrimary,
+        },
+        headerTintColor: theme.colors.primary,
       }}
     >
       <MainStack.Screen 

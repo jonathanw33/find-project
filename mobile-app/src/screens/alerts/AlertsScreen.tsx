@@ -8,6 +8,7 @@ import {
   Alert as RNAlert,
   ActivityIndicator,
   ScrollView,
+  Animated,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
@@ -19,6 +20,7 @@ import { MainStackParamList } from '../../navigation';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { alertService } from '../../services/supabase';
+import { theme } from '../../theme';
 
 type NavigationProp = StackNavigationProp<MainStackParamList>;
 

@@ -11,6 +11,7 @@ import {
   Switch,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 import { useTracker } from '../../context/TrackerContext';
 import { useSupabaseTrackers } from '../../hooks/useSupabaseTrackers';
@@ -21,6 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Marker, Region } from 'react-native-maps';
 import * as Location from 'expo-location';
+import { theme } from '../../theme';
 
 type NavigationProp = StackNavigationProp<MainStackParamList>;
 

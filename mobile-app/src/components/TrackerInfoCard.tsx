@@ -5,9 +5,11 @@ import {
   StyleSheet,
   TouchableOpacity,
   Image,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Tracker } from '../redux/slices/trackerSlice';
+import { theme } from '../theme';
 
 interface TrackerInfoCardProps {
   tracker: Tracker;
@@ -20,6 +22,7 @@ const TrackerInfoCard: React.FC<TrackerInfoCardProps> = ({
   onClose,
   onViewDetails,
 }) => {
+  const scaleValue = new Animated.Value(1);
   // Format time as relative (e.g., "2 minutes ago")
   const getRelativeTime = (timestamp: number) => {
     const now = Date.now();
@@ -75,14 +78,28 @@ const TrackerInfoCard: React.FC<TrackerInfoCardProps> = ({
     }
   };
 
+  const isPhysical = tracker.type === 'physical';
+  const typeColor = isPhysical ? theme.colors.physical : theme.colors.virtual;
+
   return (
-    <View style={styles.container}>
+    <Animated.View 
+      style={[
+        styles.container,
+        {
+          transform: [{ scale: scaleValue }],
+          // Remove the opacity animation that's causing transparency
+        }
+      ]}
+    >
       <View style={styles.content}>
-        <View style={styles.iconContainer}>
+        <View style={[
+          styles.iconContainer,
+          { backgroundColor: typeColor.background }
+        ]}>
           <Ionicons 
             name={getIconName()} 
             size={32} 
-            color={tracker.type === 'physical' ? '#007AFF' : '#FF9500'} 
+            color={typeColor.primary} 
           />
         </View>
         
@@ -91,13 +108,13 @@ const TrackerInfoCard: React.FC<TrackerInfoCardProps> = ({
             <Text style={styles.trackerName}>{tracker.name}</Text>
             <View style={[
               styles.badgeContainer, 
-              { backgroundColor: tracker.type === 'physical' ? '#E1F5FE' : '#FFF3E0' }
+              { backgroundColor: typeColor.light }
             ]}>
               <Text style={[
                 styles.badgeText, 
-                { color: tracker.type === 'physical' ? '#0288D1' : '#FF9800' }
+                { color: typeColor.primary }
               ]}>
-                {tracker.type === 'physical' ? 'Physical' : 'Virtual'}
+                {isPhysical ? 'Physical' : 'Virtual'}
               </Text>
             </View>
           </View>
@@ -119,20 +136,20 @@ const TrackerInfoCard: React.FC<TrackerInfoCardProps> = ({
                 size={16} 
                 color={
                   tracker.batteryLevel > 70 
-                    ? '#4CAF50' 
+                    ? theme.colors.battery.high
                     : tracker.batteryLevel > 30 
-                    ? '#FF9800' 
-                    : '#F44336'
+                    ? theme.colors.battery.medium
+                    : theme.colors.battery.low
                 } 
               />
               <Text style={[
                 styles.batteryText,
                 {
                   color: tracker.batteryLevel > 70 
-                    ? '#4CAF50' 
+                    ? theme.colors.battery.high
                     : tracker.batteryLevel > 30 
-                    ? '#FF9800' 
-                    : '#F44336'
+                    ? theme.colors.battery.medium
+                    : theme.colors.battery.low
                 }
               ]}>
                 {tracker.batteryLevel}%
@@ -157,20 +174,16 @@ const TrackerInfoCard: React.FC<TrackerInfoCardProps> = ({
           <Ionicons name="close" size={24} color="#999" />
         </TouchableOpacity>
       </View>
-    </View>
+    </Animated.View>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 15,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.base,
+    ...theme.shadows.lg,
   },
   content: {
     flexDirection: 'row',
@@ -179,11 +192,10 @@ const styles = StyleSheet.create({
   iconContainer: {
     width: 60,
     height: 60,
-    borderRadius: 30,
-    backgroundColor: '#f5f5f5',
+    borderRadius: theme.radius.xl,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 15,
+    marginRight: theme.spacing.base,
   },
   infoContainer: {
     flex: 1,
@@ -192,58 +204,59 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: theme.spacing.xs,
   },
   trackerName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.textPrimary,
   },
   badgeContainer: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
   },
   badgeText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: theme.typography.fontSize.xs,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   lastSeen: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 4,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    marginBottom: theme.spacing.xs,
   },
   batteryContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   batteryText: {
-    fontSize: 14,
-    marginLeft: 4,
-    fontWeight: '500',
+    fontSize: theme.typography.fontSize.sm,
+    marginLeft: theme.spacing.xs,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   buttonContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 15,
-    paddingTop: 15,
+    marginTop: theme.spacing.base,
+    paddingTop: theme.spacing.base,
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: theme.colors.borderLight,
   },
   button: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.base,
+    borderRadius: theme.radius.full,
+    ...theme.shadows.sm,
   },
   buttonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
+    color: theme.colors.textOnPrimary,
+    fontWeight: theme.typography.fontWeight.semibold,
+    fontSize: theme.typography.fontSize.sm,
   },
   closeButton: {
-    padding: 5,
+    padding: theme.spacing.xs,
   },
 });
 
