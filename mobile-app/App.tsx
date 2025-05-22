@@ -13,17 +13,25 @@ import clientAlertChecker from './src/services/clientAlertChecker';
 import { useSelector } from 'react-redux';
 import { RootState } from './src/redux/store';
 import { AppState, AppStateStatus } from 'react-native';
-import * as Notifications from 'expo-notifications';
 
-// Configure notifications
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Conditional notifications import
+let Notifications: any = null;
+try {
+  Notifications = require('expo-notifications');
+  // Configure notifications only if available
+  if (Notifications) {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowBanner: true,
+        shouldShowList: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  }
+} catch (error) {
+  console.log('Expo notifications not available, continuing without notifications');
+}
 
 // Separate component for alert checking to have access to Redux
 const AlertChecker: React.FC = () => {
@@ -35,8 +43,12 @@ const AlertChecker: React.FC = () => {
     if (!user) return;
     
     const initializeAlerts = async () => {
-      // Set up notifications
-      await clientAlertChecker.setupNotifications();
+      // Try to set up notifications (may fail if not available)
+      try {
+        await clientAlertChecker.setupNotifications();
+      } catch (error) {
+        console.log('Could not set up notifications:', error);
+      }
       
       // Check alerts on app start
       checkAlerts();

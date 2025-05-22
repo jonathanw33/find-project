@@ -309,7 +309,7 @@ const CreateScheduledAlertScreen: React.FC = () => {
                   style={styles.picker}
                 >
                   {Array.from({ length: 31 }, (_, i) => i + 1).map(day => (
-                    <Picker.Item key={day} label={`${day}`} value={day} />
+                    <Picker.Item key={day} label={day.toString()} value={day} />
                   ))}
                 </Picker>
               </View>
@@ -354,7 +354,9 @@ const CreateScheduledAlertScreen: React.FC = () => {
         <Text style={styles.loadingText}>Loading alert details...</Text>
       </View>
     );
-  }  return (
+  }
+
+  return (
     <SafeAreaView style={styles.container} edges={['right', 'left']}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.formContainer}>
@@ -415,7 +417,8 @@ const CreateScheduledAlertScreen: React.FC = () => {
           style={styles.saveButton}
           onPress={handleSave}
           disabled={loading}
-        >          {loading ? (
+        >
+          {loading ? (
             <ActivityIndicator size="small" color="#fff" />
           ) : (
             <>

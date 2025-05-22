@@ -43,9 +43,18 @@ export interface UpdateScheduledAlertParams {
 
 export const scheduledAlertService = {
   async getScheduledAlerts(trackerId?: string): Promise<ScheduledAlert[]> {
+    // Get the current user ID for security
+    const { data: authData } = await supabase.auth.getSession();
+    const userId = authData.session?.user?.id;
+    
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    
     let query = supabase
       .from('scheduled_alerts')
       .select('*')
+      .eq('user_id', userId) // Only get alerts for the current user
       .order('created_at', { ascending: false });
       
     if (trackerId) {
@@ -74,10 +83,19 @@ export const scheduledAlertService = {
   },
   
   async getScheduledAlert(id: string): Promise<ScheduledAlert> {
+    // Get the current user ID for security
+    const { data: authData } = await supabase.auth.getSession();
+    const userId = authData.session?.user?.id;
+    
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    
     const { data, error } = await supabase
       .from('scheduled_alerts')
       .select('*')
       .eq('id', id)
+      .eq('user_id', userId) // Only allow access to user's own alerts
       .single();
       
     if (error) throw error;
@@ -100,9 +118,18 @@ export const scheduledAlertService = {
   },
   
   async createScheduledAlert(params: CreateScheduledAlertParams): Promise<ScheduledAlert> {
+    // Get the current user ID
+    const { data: authData } = await supabase.auth.getSession();
+    const userId = authData.session?.user?.id;
+    
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    
     const { data, error } = await supabase
       .from('scheduled_alerts')
       .insert({
+        user_id: userId,
         tracker_id: params.trackerId,
         title: params.title,
         message: params.message,
@@ -136,6 +163,14 @@ export const scheduledAlertService = {
   },
   
   async updateScheduledAlert(id: string, params: UpdateScheduledAlertParams): Promise<ScheduledAlert> {
+    // Get the current user ID for security
+    const { data: authData } = await supabase.auth.getSession();
+    const userId = authData.session?.user?.id;
+    
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    
     const updates: any = {};
     
     if (params.title !== undefined) updates.title = params.title;
@@ -151,6 +186,7 @@ export const scheduledAlertService = {
       .from('scheduled_alerts')
       .update(updates)
       .eq('id', id)
+      .eq('user_id', userId) // Only allow updating user's own alerts
       .select()
       .single();
       
@@ -174,10 +210,19 @@ export const scheduledAlertService = {
   },
   
   async deleteScheduledAlert(id: string): Promise<void> {
+    // Get the current user ID for security
+    const { data: authData } = await supabase.auth.getSession();
+    const userId = authData.session?.user?.id;
+    
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
+    
     const { error } = await supabase
       .from('scheduled_alerts')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('user_id', userId); // Only allow deleting user's own alerts
       
     if (error) throw error;
   },

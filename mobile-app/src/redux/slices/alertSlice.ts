@@ -3,7 +3,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 export interface Alert {
   id: string;
   trackerId: string;
-  type: 'left_behind' | 'moved' | 'low_battery' | 'out_of_range' | 'custom';
+  type: 'left_behind' | 'moved' | 'low_battery' | 'out_of_range' | 'geofence_enter' | 'geofence_exit' | 'scheduled' | 'custom';
   title: string;
   message: string;
   timestamp: number;

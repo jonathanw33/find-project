@@ -1,32 +1,54 @@
-import { supabase } from '../services/supabase';
+import { supabase, alertService } from '../services/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
+
+// Conditional notifications import
+let Notifications: any = null;
+try {
+  Notifications = require('expo-notifications');
+} catch (error) {
+  console.log('Expo notifications not available');
+}
 
 // Client-side geofence and scheduled alerts checking
 export const clientAlertChecker = {
   // Initialize notifications
   async setupNotifications() {
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('geofence-alerts', {
-        name: 'Geofence Alerts',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: '#FF9500',
-      });
-    }
-
-    // Request permissions
-    const { status } = await Notifications.requestPermissionsAsync();
-    if (status !== 'granted') {
-      console.log('Notification permissions not granted');
+    if (!Notifications) {
+      console.log('Notifications not available, skipping setup');
       return false;
     }
-    return true;
+
+    try {
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('geofence-alerts', {
+          name: 'Geofence Alerts',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF9500',
+        });
+      }
+
+      // Request permissions
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Notification permissions not granted');
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Error setting up notifications:', error);
+      return false;
+    }
   },
 
   // Show local notification
   async showNotification(title: string, message: string, data?: any) {
+    if (!Notifications) {
+      console.log('Notifications not available, skipping notification');
+      return;
+    }
+
     try {
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -171,17 +193,22 @@ export const clientAlertChecker = {
         .eq('id', geofenceId)
         .single();
         
-      await supabase.from('alerts').insert({
-        user_id: tracker.user_id,
+      // Create the alert using the proper alert service
+      await alertService.createAlert({
         tracker_id: trackerId,
-        type: eventType === 'enter' ? 'geofence_enter' : 'geofence_exit',
+        type: 'custom', // Use 'custom' since geofence types aren't in the RPC function
         title: eventType === 'enter' ? 'Geofence Entered' : 'Geofence Exited',
         message: `${tracker.name} has ${eventType === 'enter' ? 'entered' : 'left'} ${geofence.name}`,
-        geofence_data: {
-          geofence_id: geofenceId,
-          geofence_name: geofence.name
+        icon: eventType === 'enter' ? 'enter-outline' : 'exit-outline',
+        data: {
+          geofence_data: {
+            geofence_id: geofenceId,
+            geofence_name: geofence.name
+          },
+          alert_type: eventType === 'enter' ? 'geofence_enter' : 'geofence_exit' // Store the real type in data
         }
       });
+      console.log(`Created geofence ${eventType} alert for ${tracker.name}`);
     } catch (error) {
       console.error('Error creating geofence alert:', error);
     }
@@ -189,25 +216,53 @@ export const clientAlertChecker = {
   async checkScheduledAlerts() {
     try {
       const now = new Date();
-      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+      
+      // Use local time for comparison since scheduled_time is stored in local format
+      const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:00`;
       const currentDay = now.getDay(); // 0-6 for Sunday-Saturday
       const currentDate = now.toISOString().split('T')[0]; // YYYY-MM-DD
       const currentDayOfMonth = now.getDate(); // 1-31
       
-      // Get all active scheduled alerts that match the current time
+      console.log(`Checking scheduled alerts at ${currentTime} on ${currentDate}`);
+      
+      // Get all active scheduled alerts that match the current time (with some tolerance)
       const { data: alerts, error } = await supabase
         .from('scheduled_alerts')
         .select('*, trackers:tracker_id(name)')
         .eq('is_active', true)
-        .eq('scheduled_time', currentTime)
         .or(`schedule_type.eq.one_time,schedule_type.eq.daily,and(schedule_type.eq.weekly,day_of_week.eq.${currentDay}),and(schedule_type.eq.monthly,day_of_month.eq.${currentDayOfMonth})`);
         
       if (error) throw error;
       
-      // Filter one-time alerts to match the current date
-      const triggeredAlerts = alerts?.filter(alert => 
-        alert.schedule_type !== 'one_time' || alert.scheduled_date === currentDate
-      ) || [];
+      console.log(`Found ${alerts?.length || 0} potentially matching scheduled alerts`);
+      
+      // Filter alerts that match the current time and conditions
+      const triggeredAlerts = (alerts || []).filter(alert => {
+        // Check if the scheduled time matches (within 1 minute tolerance)
+        const scheduledTime = alert.scheduled_time;
+        if (!scheduledTime) return false;
+        
+        // For time comparison, we need to check if current time matches scheduled time
+        const scheduledHour = parseInt(scheduledTime.split(':')[0]);
+        const scheduledMinute = parseInt(scheduledTime.split(':')[1]);
+        const currentHour = now.getHours();
+        const currentMinute = now.getMinutes();
+        
+        // Check if we're within 1 minute of the scheduled time
+        const timeDiff = Math.abs((currentHour * 60 + currentMinute) - (scheduledHour * 60 + scheduledMinute));
+        const timeMatches = timeDiff <= 1;
+        
+        if (!timeMatches) return false;
+        
+        // For one-time alerts, also check the date
+        if (alert.schedule_type === 'one_time') {
+          return alert.scheduled_date === currentDate;
+        }
+        
+        return true;
+      });
+      
+      console.log(`Found ${triggeredAlerts.length} alerts to trigger`);
       
       // Create alerts for each triggered scheduled alert
       for (const alert of triggeredAlerts) {
@@ -218,9 +273,12 @@ export const clientAlertChecker = {
           
           // Skip if triggered in the last hour (to prevent duplicates)
           if (differenceMs < 3600000) {
+            console.log(`Skipping alert ${alert.id} - triggered recently`);
             continue;
           }
         }
+        
+        console.log(`Triggering alert: ${alert.title}`);
         
         // Show local notification
         this.showNotification(
@@ -233,18 +291,26 @@ export const clientAlertChecker = {
           }
         );
         
-        // Create the alert
-        await supabase.from('alerts').insert({
-          user_id: alert.user_id,
-          tracker_id: alert.tracker_id,
-          type: 'scheduled',
-          title: alert.title,
-          message: alert.message,
-          schedule_data: {
-            schedule_id: alert.id,
-            schedule_type: alert.schedule_type,
-          }
-        });
+        // Create the alert using the proper alert service
+        try {
+          await alertService.createAlert({
+            tracker_id: alert.tracker_id,
+            type: 'custom', // Use 'custom' since 'scheduled' isn't in the RPC function types
+            title: alert.title,
+            message: alert.message,
+            icon: 'time-outline',
+            data: {
+              schedule_data: {
+                schedule_id: alert.id,
+                schedule_type: alert.schedule_type,
+              },
+              alert_type: 'scheduled' // Store the real type in data
+            }
+          });
+          console.log(`Created alert in database for: ${alert.title}`);
+        } catch (alertError) {
+          console.error('Error creating alert in database:', alertError);
+        }
         
         // Update the last triggered timestamp
         await supabase

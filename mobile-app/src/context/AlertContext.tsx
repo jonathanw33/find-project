@@ -45,6 +45,13 @@ export const AlertProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Load alerts when user changes
     if (user) {
       loadAlerts();
+      
+      // Set up periodic refresh to catch alerts created by background processes
+      const alertRefreshInterval = setInterval(() => {
+        loadAlerts();
+      }, 30000); // Refresh every 30 seconds
+      
+      return () => clearInterval(alertRefreshInterval);
     } else {
       // Clear alerts when user logs out
       dispatch(setAlerts([]));
