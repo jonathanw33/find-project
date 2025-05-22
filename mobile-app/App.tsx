@@ -13,18 +13,36 @@ import clientAlertChecker from './src/services/clientAlertChecker';
 import { useSelector } from 'react-redux';
 import { RootState } from './src/redux/store';
 import { AppState, AppStateStatus } from 'react-native';
+import * as Notifications from 'expo-notifications';
+
+// Configure notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
 
 // Separate component for alert checking to have access to Redux
 const AlertChecker: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const { trackers } = useSelector((state: RootState) => state.trackers);
   
-  // Check scheduled alerts when app becomes active
+  // Initialize notifications and check alerts when user is authenticated
   useEffect(() => {
     if (!user) return;
     
-    // Check on mount
-    checkAlerts();
+    const initializeAlerts = async () => {
+      // Set up notifications
+      await clientAlertChecker.setupNotifications();
+      
+      // Check alerts on app start
+      checkAlerts();
+    };
+    
+    initializeAlerts();
     
     // Set up app state listener
     const subscription = AppState.addEventListener('change', handleAppStateChange);
@@ -46,11 +64,11 @@ const AlertChecker: React.FC = () => {
     
     // Check geofences for each tracker with a location
     Object.values(trackers).forEach(tracker => {
-      if (tracker?.last_seen_latitude && tracker?.last_seen_longitude) {
+      if (tracker?.lastSeen?.latitude && tracker?.lastSeen?.longitude) {
         clientAlertChecker.checkGeofences(
           tracker.id,
-          tracker.last_seen_latitude,
-          tracker.last_seen_longitude
+          tracker.lastSeen.latitude,
+          tracker.lastSeen.longitude
         );
       }
     });
@@ -69,11 +87,11 @@ const AlertChecker: React.FC = () => {
     // Check geofences for each tracker
     if (trackers && Object.keys(trackers).length > 0) {
       Object.values(trackers).forEach(tracker => {
-        if (tracker?.last_seen_latitude && tracker?.last_seen_longitude) {
+        if (tracker?.lastSeen?.latitude && tracker?.lastSeen?.longitude) {
           clientAlertChecker.checkGeofences(
             tracker.id,
-            tracker.last_seen_latitude,
-            tracker.last_seen_longitude
+            tracker.lastSeen.latitude,
+            tracker.lastSeen.longitude
           );
         }
       });

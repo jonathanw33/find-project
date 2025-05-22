@@ -1,14 +1,16 @@
 import { LocationPoint } from '../redux/slices/trackerSlice';
+import { Geofence } from '../services/geofence/geofenceService';
 
-type SimulationPattern = 'random' | 'circle' | 'line';
+export type SimulationPattern = 'random' | 'circle' | 'line' | 'geofence_cross';
 
-interface SimulationOptions {
+export interface SimulationOptions {
   radius?: number;        // For circle pattern (in degrees of lat/long)
   speed?: number;         // Movement speed (in degrees of lat/long per update)
   direction?: number;     // Direction in radians (for line pattern)
   updateInterval?: number; // Time between updates in ms
   jitter?: number;        // Random noise to add to movements (0-1)
   maxDistance?: number;   // Maximum distance to travel for line pattern
+  targetGeofence?: Geofence; // For geofence crossing simulation
 }
 
 const defaultOptions: SimulationOptions = {
@@ -30,6 +32,8 @@ const simulations: Record<string, {
     currentLocation: LocationPoint;
     angle?: number;      // For circle pattern
     distance?: number;   // For line pattern
+    geofenceCrossed?: boolean; // For geofence pattern
+    steps?: number;      // For geofence pattern
   };
 }> = {};
 
@@ -55,6 +59,8 @@ export const startSimulation = (
     currentLocation: { ...startLocation },
     angle: 0,            // Starting angle for circle pattern
     distance: 0,         // Distance traveled for line pattern
+    geofenceCrossed: false, // For geofence crossing pattern
+    steps: 0             // For tracking simulation progress
   };
   
   // Create interval to update location
@@ -89,8 +95,11 @@ export const startSimulation = (
 export const stopSimulation = (trackerId: string): void => {
   const simulation = simulations[trackerId];
   if (simulation) {
+    console.log(`Stopping utils simulation for ${trackerId}`);
     clearInterval(simulation.intervalId);
     delete simulations[trackerId];
+  } else {
+    console.log(`No utils simulation found for ${trackerId}`);
   }
 };
 
@@ -106,6 +115,8 @@ function calculateNextLocation(
     currentLocation: LocationPoint;
     angle?: number;
     distance?: number;
+    geofenceCrossed?: boolean;
+    steps?: number;
   }
 ): LocationPoint {
   let newLat = currentLocation.latitude;
@@ -158,6 +169,136 @@ function calculateNextLocation(
       
       // Increment distance traveled
       state.distance += options.speed || 0.00005;
+      break;
+      
+    case 'geofence_cross':
+      // Initialize simulation state
+      if (state.steps === undefined) state.steps = 0;
+      if (state.geofenceCrossed === undefined) state.geofenceCrossed = false;
+
+      // Check if we have a target geofence
+      if (!options.targetGeofence) {
+        // If no target geofence, just move randomly
+        const randomRange = options.speed || 0.00005;
+        newLat = currentLocation.latitude + (Math.random() - 0.5) * randomRange * 2;
+        newLng = currentLocation.longitude + (Math.random() - 0.5) * randomRange * 2;
+        break;
+      }
+
+      const geofence = options.targetGeofence;
+      
+      // Calculate current distance to geofence center
+      const currentDistance = calculateDistance(
+        currentLocation.latitude, currentLocation.longitude,
+        geofence.centerLatitude, geofence.centerLongitude
+      ) * 111000; // Convert to approximate meters (1 degree ~ 111km)
+      
+      // Determine if we're inside or outside the geofence
+      const isInside = currentDistance <= geofence.radius;
+      
+      // Increase step count
+      state.steps += 1;
+      
+      if (!state.geofenceCrossed) {
+        // We haven't crossed the geofence yet
+        if (isInside) {
+          // We're inside and need to move out - move away from center
+          const angle = Math.atan2(
+            currentLocation.longitude - geofence.centerLongitude,
+            currentLocation.latitude - geofence.centerLatitude
+          );
+          
+          // Move outward
+          newLat = currentLocation.latitude + Math.cos(angle) * (options.speed || 0.00005) * 2;
+          newLng = currentLocation.longitude + Math.sin(angle) * (options.speed || 0.00005) * 2;
+          
+          // Check if we've just crossed out of the geofence
+          const newDistance = calculateDistance(
+            newLat, newLng,
+            geofence.centerLatitude, geofence.centerLongitude
+          ) * 111000;
+          
+          if (newDistance > geofence.radius) {
+            console.log('Geofence EXITED during simulation!');
+            state.geofenceCrossed = true;
+          }
+        } else {
+          // We're outside and need to move in - move toward center
+          const angle = Math.atan2(
+            geofence.centerLongitude - currentLocation.longitude,
+            geofence.centerLatitude - currentLocation.latitude
+          );
+          
+          // Move inward
+          newLat = currentLocation.latitude + Math.cos(angle) * (options.speed || 0.00005) * 2;
+          newLng = currentLocation.longitude + Math.sin(angle) * (options.speed || 0.00005) * 2;
+          
+          // Check if we've just crossed into the geofence
+          const newDistance = calculateDistance(
+            newLat, newLng,
+            geofence.centerLatitude, geofence.centerLongitude
+          ) * 111000;
+          
+          if (newDistance <= geofence.radius) {
+            console.log('Geofence ENTERED during simulation!');
+            state.geofenceCrossed = true;
+          }
+        }
+      } else {
+        // We've already crossed once, now cross back
+        if (isInside) {
+          // We're inside and need to move out - move away from center
+          const angle = Math.atan2(
+            currentLocation.longitude - geofence.centerLongitude,
+            currentLocation.latitude - geofence.centerLatitude
+          );
+          
+          // Move outward more quickly to exit
+          newLat = currentLocation.latitude + Math.cos(angle) * (options.speed || 0.00005) * 3;
+          newLng = currentLocation.longitude + Math.sin(angle) * (options.speed || 0.00005) * 3;
+          
+          // Check if we've just crossed out of the geofence
+          const newDistance = calculateDistance(
+            newLat, newLng,
+            geofence.centerLatitude, geofence.centerLongitude
+          ) * 111000;
+          
+          if (newDistance > geofence.radius) {
+            console.log('Geofence EXITED during simulation!');
+            // Reset cycle so we can cross again
+            state.geofenceCrossed = false;
+          }
+        } else {
+          // We're outside and need to move in - move toward center
+          const angle = Math.atan2(
+            geofence.centerLongitude - currentLocation.longitude,
+            geofence.centerLatitude - currentLocation.latitude
+          );
+          
+          // Move inward
+          newLat = currentLocation.latitude + Math.cos(angle) * (options.speed || 0.00005) * 2;
+          newLng = currentLocation.longitude + Math.sin(angle) * (options.speed || 0.00005) * 2;
+          
+          // Check if we've just crossed into the geofence
+          const newDistance = calculateDistance(
+            newLat, newLng,
+            geofence.centerLatitude, geofence.centerLongitude
+          ) * 111000;
+          
+          if (newDistance <= geofence.radius) {
+            console.log('Geofence ENTERED during simulation!');
+            // Reset cycle so we can cross again
+            state.geofenceCrossed = false;
+          }
+        }
+      }
+      
+      // Add some jitter for realism
+      if (options.jitter) {
+        const jitterAmount = options.jitter * options.speed! * 0.5;
+        newLat += (Math.random() - 0.5) * jitterAmount;
+        newLng += (Math.random() - 0.5) * jitterAmount;
+      }
       break;
       
     case 'random':
@@ -231,7 +372,7 @@ export const simulateLeftBehind = (
   );
   
   // Check distance every 5 seconds
-  return setInterval(() => {
+  const leftBehindInterval = setInterval(() => {
     // Get current user location (this would come from the app in real usage)
     const currentDistance = calculateDistance(
       userLocation.latitude, userLocation.longitude,
@@ -242,9 +383,11 @@ export const simulateLeftBehind = (
     if (currentDistance - initialDistance > triggerDistance) {
       onTrigger();
       // Clear this interval as we've triggered the alert
-      clearInterval(leftBehindInterval as unknown as NodeJS.Timeout);
+      clearInterval(leftBehindInterval);
     }
-  }, 5000) as unknown as NodeJS.Timeout;
+  }, 5000);
+  
+  return leftBehindInterval;
 };
 
 /**
@@ -256,3 +399,60 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   const lonDiff = lon2 - lon1;
   return Math.sqrt(latDiff * latDiff + lonDiff * lonDiff);
 }
+
+/**
+ * Start a geofence crossing simulation.
+ * This is a specialized simulation that will make a tracker cross into and out of a geofence
+ * to test geofence enter/exit alerts.
+ */
+export const startGeofenceCrossingSimulation = (
+  trackerId: string,
+  startLocation: LocationPoint,
+  geofence: Geofence,
+  onUpdate: (location: LocationPoint) => void
+): void => {
+  // Determine a good starting position
+  // If starting near geofence, we'll want to make sure it's outside so we can test entrance
+  const distanceToGeofence = calculateDistance(
+    startLocation.latitude, startLocation.longitude,
+    geofence.centerLatitude, geofence.centerLongitude
+  ) * 111000; // Convert to approximate meters (1 degree ~ 111km)
+  
+  const isInsideGeofence = distanceToGeofence <= geofence.radius;
+  
+  // If inside, we'll move the starting point outside with a buffer
+  let adjustedStartLocation = { ...startLocation };
+  if (isInsideGeofence) {
+    // Calculate angle from geofence center to start location
+    const angle = Math.atan2(
+      startLocation.longitude - geofence.centerLongitude,
+      startLocation.latitude - geofence.centerLatitude
+    );
+    
+    // Move further in this direction to get outside
+    const distanceToAdd = (geofence.radius * 1.2 - distanceToGeofence) / 111000; // Convert back to degrees
+    adjustedStartLocation = {
+      ...startLocation,
+      latitude: startLocation.latitude + Math.cos(angle) * distanceToAdd,
+      longitude: startLocation.longitude + Math.sin(angle) * distanceToAdd
+    };
+    
+    console.log('Adjusted starting location to outside geofence');
+  }
+  
+  // Start the simulation with the geofence_cross pattern
+  startSimulation(
+    trackerId,
+    adjustedStartLocation,
+    'geofence_cross',
+    {
+      targetGeofence: geofence,
+      speed: 0.00008, // Slightly faster for better testing
+      updateInterval: 2000, // More frequent updates
+      jitter: 0.1 // Less jitter for more predictable crossing
+    },
+    onUpdate
+  );
+  
+  console.log(`Started geofence crossing simulation for "${trackerId}" and geofence ${geofence.name}`);
+};

@@ -1,8 +1,47 @@
 import { supabase } from '../services/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 
 // Client-side geofence and scheduled alerts checking
 export const clientAlertChecker = {
+  // Initialize notifications
+  async setupNotifications() {
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('geofence-alerts', {
+        name: 'Geofence Alerts',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#FF9500',
+      });
+    }
+
+    // Request permissions
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      console.log('Notification permissions not granted');
+      return false;
+    }
+    return true;
+  },
+
+  // Show local notification
+  async showNotification(title: string, message: string, data?: any) {
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body: message,
+          data: data || {},
+          sound: true,
+        },
+        trigger: null, // Show immediately
+      });
+    } catch (error) {
+      console.error('Error showing notification:', error);
+    }
+  },
+
   // Check for geofence crossings
   async checkGeofences(trackerId: string, latitude: number, longitude: number) {
     try {
@@ -42,6 +81,13 @@ export const clientAlertChecker = {
         console.log(`⚙️ Checking ${geofenceCount} geofences for tracker ${trackerId}`);
       }
       
+      // Get the tracker name for alerts
+      const { data: tracker } = await supabase
+        .from('trackers')
+        .select('name')
+        .eq('id', trackerId)
+        .single();
+      
       for (const item of linkedGeofences || []) {
         const geofence = item.geofences;
         
@@ -63,17 +109,41 @@ export const clientAlertChecker = {
         
         // Only log if there's a state change to reduce console clutter
         const stateChanged = isInside !== wasInside;
-        if (stateChanged || process.env.NODE_ENV === 'development' && false) { // Set to true for verbose logging
+        if (stateChanged) {
           console.log(`Geofence ${geofence.name}: distance=${Math.round(distance)}m, radius=${geofence.radius}m, inside=${isInside}, was_inside=${wasInside}`);
         }
         
         // Check for enter/exit events
         if (item.alert_on_enter && isInside && !wasInside) {
           console.log(`🟢 ALERT: Tracker entered geofence "${geofence.name}"`);
+          
+          // Show local notification
+          this.showNotification(
+            'Geofence Entered',
+            `${tracker.name} has entered ${geofence.name}`,
+            { 
+              type: 'geofence_enter',
+              trackerId,
+              geofenceId: geofence.id
+            }
+          );
+          
           // Create enter alert
           await this.createGeofenceAlert(trackerId, geofence.id, 'enter');
         } else if (item.alert_on_exit && !isInside && wasInside) {
           console.log(`🔴 ALERT: Tracker exited geofence "${geofence.name}"`);
+          
+          // Show local notification
+          this.showNotification(
+            'Geofence Exited',
+            `${tracker.name} has left ${geofence.name}`,
+            { 
+              type: 'geofence_exit',
+              trackerId,
+              geofenceId: geofence.id
+            }
+          );
+          
           // Create exit alert
           await this.createGeofenceAlert(trackerId, geofence.id, 'exit');
         }
@@ -127,7 +197,7 @@ export const clientAlertChecker = {
       // Get all active scheduled alerts that match the current time
       const { data: alerts, error } = await supabase
         .from('scheduled_alerts')
-        .select('*')
+        .select('*, trackers:tracker_id(name)')
         .eq('is_active', true)
         .eq('scheduled_time', currentTime)
         .or(`schedule_type.eq.one_time,schedule_type.eq.daily,and(schedule_type.eq.weekly,day_of_week.eq.${currentDay}),and(schedule_type.eq.monthly,day_of_month.eq.${currentDayOfMonth})`);
@@ -151,6 +221,17 @@ export const clientAlertChecker = {
             continue;
           }
         }
+        
+        // Show local notification
+        this.showNotification(
+          alert.title,
+          alert.message,
+          { 
+            type: 'scheduled_alert',
+            trackerId: alert.tracker_id,
+            alertId: alert.id
+          }
+        );
         
         // Create the alert
         await supabase.from('alerts').insert({

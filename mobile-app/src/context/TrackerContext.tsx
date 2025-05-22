@@ -322,8 +322,11 @@ export const TrackerProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   const stopTrackerSimulation = (id: string) => {
     if (simulationIntervals[id]) {
+      console.log(`Stopping TrackerContext simulation for ${id}`);
       clearInterval(simulationIntervals[id]);
       delete simulationIntervals[id];
+    } else {
+      console.log(`No TrackerContext simulation found for ${id}`);
     }
   };
 

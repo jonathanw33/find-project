@@ -658,6 +658,16 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
+              style={styles.advancedSimulationButton}
+              onPress={() => navigation.navigate('TrackerSimulation', { trackerId: tracker.id })}
+              disabled={loading}
+            >
+              <Ionicons name="flask" size={24} color="#fff" />
+              <Text style={styles.simulationButtonText}>
+                Advanced Simulation
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
               style={styles.lostButton}
               onPress={() => markTrackerAsLost(trackerId)}
               disabled={loading}
@@ -933,6 +943,15 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
     backgroundColor: '#FF9500', // Orange for alert simulation
+  },
+  advancedSimulationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 8,
+    backgroundColor: '#8E44AD', // Purple for advanced simulation
+    marginTop: 12,
   },
   lostButton: {
     flexDirection: 'row',

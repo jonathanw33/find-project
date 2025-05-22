@@ -198,7 +198,15 @@ export const geofenceService = {
     if (error) throw error;
     
     return (data || []).map(item => ({
-      ...item.geofences,
+      id: item.geofences.id,
+      name: item.geofences.name,
+      description: item.geofences.description,
+      centerLatitude: item.geofences.center_latitude,
+      centerLongitude: item.geofences.center_longitude,
+      radius: item.geofences.radius,
+      isActive: item.geofences.is_active,
+      createdAt: item.geofences.created_at,
+      updatedAt: item.geofences.updated_at,
       alertOnEnter: item.alert_on_enter,
       alertOnExit: item.alert_on_exit,
     }));

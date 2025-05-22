@@ -8,19 +8,22 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Switch,
 } from 'react-native';
-import MapView, { Marker, Region } from 'react-native-maps';
+import MapView, { Marker, Region, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as Location from 'expo-location';
 import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../redux/store';
 import { setSelectedTracker } from '../../redux/slices/trackerSlice';
 import { useTracker } from '../../context/TrackerContext';
+import { useGeofence } from '../../context/GeofenceContext';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MainStackParamList } from '../../navigation';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import TrackerInfoCard from '../../components/TrackerInfoCard';
+import { Geofence } from '../../services/geofence/geofenceService';
 
 type NavigationProp = StackNavigationProp<MainStackParamList>;
 
@@ -35,12 +38,16 @@ const MapScreen: React.FC = () => {
   const [region, setRegion] = useState<Region>(initialRegion);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showGeofences, setShowGeofences] = useState(true);
+  const [trackerGeofences, setTrackerGeofences] = useState<Geofence[]>([]);
+  const [allGeofences, setAllGeofences] = useState<Geofence[]>([]);
   const mapRef = useRef<MapView>(null);
   const { trackers, selectedTrackerId, loading: trackersLoading, error: trackersError } = useSelector((state: RootState) => state.trackers);
   const { user, loading: authLoading } = useSelector((state: RootState) => state.auth); 
   const dispatch = useDispatch();
   const navigation = useNavigation<NavigationProp>();
   const { createVirtualTracker, selectTracker, getCurrentUserLocation } = useTracker();
+  const { geofences, getLinkedGeofences } = useGeofence();
 
   useEffect(() => {
     const getLocation = async () => {
@@ -106,11 +113,33 @@ const MapScreen: React.FC = () => {
       }
     );
 
+    // Load all available geofences
+    setAllGeofences(geofences);
+
     return () => {
       // Clean up subscription
       locationSubscription.then((sub) => sub.remove());
     };
-  }, [selectedTrackerId, trackers, authLoading]);
+  }, [selectedTrackerId, trackers, authLoading, geofences]);
+  
+  // Effect to load linked geofences when a tracker is selected
+  useEffect(() => {
+    const loadTrackerGeofences = async () => {
+      if (selectedTrackerId) {
+        try {
+          const linkedGeofences = await getLinkedGeofences(selectedTrackerId);
+          console.log('Loaded linked geofences:', linkedGeofences);
+          setTrackerGeofences(linkedGeofences);
+        } catch (error) {
+          console.error('Error loading tracker geofences:', error);
+        }
+      } else {
+        setTrackerGeofences([]);
+      }
+    };
+    
+    loadTrackerGeofences();
+  }, [selectedTrackerId, getLinkedGeofences]);
 
   const handleMarkerPress = (trackerId: string) => {
     dispatch(setSelectedTracker(trackerId));
@@ -205,6 +234,31 @@ const MapScreen: React.FC = () => {
               />
             )
           ))}
+          
+          {/* Display geofences of selected tracker or all geofences if no tracker selected */}
+          {showGeofences && (selectedTrackerId ? trackerGeofences : allGeofences)
+            .filter((geofence) => 
+              geofence && 
+              geofence.centerLatitude != null && 
+              geofence.centerLongitude != null && 
+              geofence.radius != null &&
+              !isNaN(geofence.centerLatitude) &&
+              !isNaN(geofence.centerLongitude) &&
+              !isNaN(geofence.radius)
+            )
+            .map((geofence) => (
+            <Circle
+              key={geofence.id}
+              center={{
+                latitude: Number(geofence.centerLatitude),
+                longitude: Number(geofence.centerLongitude),
+              }}
+              radius={Number(geofence.radius)}
+              strokeWidth={2}
+              strokeColor={selectedTrackerId ? '#FF3B30' : '#007AFF'} 
+              fillColor={selectedTrackerId ? 'rgba(255, 59, 48, 0.2)' : 'rgba(0, 122, 255, 0.1)'}
+            />
+          ))}
         </MapView>
 
         <View style={styles.buttonContainer}>
@@ -213,6 +267,17 @@ const MapScreen: React.FC = () => {
             onPress={handleMyLocationPress}
           >
             <Ionicons name="locate" size={24} color="#007AFF" />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.geofenceToggleButton}
+            onPress={() => setShowGeofences(!showGeofences)}
+          >
+            <Ionicons 
+              name={showGeofences ? "eye" : "eye-off"} 
+              size={24} 
+              color="#007AFF" 
+            />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -276,6 +341,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   myLocationButton: {
+    backgroundColor: '#fff',
+    borderRadius: 30,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 15,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  geofenceToggleButton: {
     backgroundColor: '#fff',
     borderRadius: 30,
     width: 50,
