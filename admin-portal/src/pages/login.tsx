@@ -100,7 +100,7 @@ const Login: React.FC = () => {
               </button>
             </div>
             <p className="text-xs text-gray-500 mt-2">
-              P.S. Please give us an A+ 🙏✨
+              P.S. Please give us a good score 🙏✨
             </p>
           </div>
           

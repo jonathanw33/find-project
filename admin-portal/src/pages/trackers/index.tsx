@@ -72,7 +72,9 @@ const Trackers: React.FC = () => {
         return {
           ...tracker,
           user_email: tracker.profiles?.email || 'Unknown',
-          user_name: tracker.profiles?.name || 'Unknown',
+          user_name: tracker.profiles?.name || 
+                     tracker.profiles?.email?.split('@')[0] || 
+                     'Unknown User',
           is_lost: isLost,
           // Add recovery status to the tracker object
           recovery_status: recoveryDisplayStatus.status
