@@ -18,6 +18,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { MainStackParamList } from '../../navigation';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { theme } from '../../theme';
 
 type NavigationProp = StackNavigationProp<MainStackParamList>;
 
@@ -200,7 +201,9 @@ const TrackerListScreen: React.FC = () => {
 
       {trackersArray.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Ionicons name="search-outline" size={60} color="#CCC" />
+          <View style={styles.emptyIconContainer}>
+            <Ionicons name="cube-outline" size={80} color={theme.colors.gray300} />
+          </View>
           <Text style={styles.emptyTitle}>No Trackers Found</Text>
           <Text style={styles.emptyText}>
             You don't have any trackers yet. Add your first tracker to start keeping track of your items.
@@ -208,6 +211,7 @@ const TrackerListScreen: React.FC = () => {
           <TouchableOpacity
             style={styles.emptyButton}
             onPress={handleAddTracker}
+            activeOpacity={0.8}
           >
             <Text style={styles.emptyButtonText}>Add Tracker</Text>
           </TouchableOpacity>
@@ -229,153 +233,162 @@ const TrackerListScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f9f9f9',
+    backgroundColor: theme.colors.background,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
+    paddingHorizontal: theme.spacing.base,
+    paddingVertical: theme.spacing.base,
+    backgroundColor: theme.colors.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: theme.colors.borderLight,
+    ...theme.shadows.sm,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: theme.typography.fontSize.xxl,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.textPrimary,
   },
   addButton: {
-    backgroundColor: '#007AFF',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    backgroundColor: theme.colors.primary,
+    width: 48,
+    height: 48,
+    borderRadius: theme.radius.xl,
     justifyContent: 'center',
     alignItems: 'center',
+    ...theme.shadows.md,
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: theme.spacing.lg,
   },
   loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: '#666',
+    marginTop: theme.spacing.md,
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
   },
   listContent: {
-    padding: 16,
+    padding: theme.spacing.base,
   },
   trackerItem: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radius.xl,
+    marginBottom: theme.spacing.md,
+    overflow: 'hidden',
+    ...theme.shadows.md,
   },
   trackerContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 16,
+    padding: theme.spacing.base,
   },
   iconContainer: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+    width: 56,
+    height: 56,
+    borderRadius: theme.radius.xl,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 16,
+    marginRight: theme.spacing.base,
   },
   trackerInfo: {
     flex: 1,
   },
   trackerName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 4,
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.semibold,
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: theme.spacing.xs,
   },
   statusIndicator: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    marginRight: 6,
+    marginRight: theme.spacing.xs,
   },
   statusText: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textSecondary,
+    fontWeight: theme.typography.fontWeight.medium,
   },
   connectionStatus: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 6,
+    fontSize: theme.typography.fontSize.sm,
+    color: theme.colors.textMuted,
+    marginLeft: theme.spacing.xs,
   },
   deleteButton: {
-    padding: 8,
+    padding: theme.spacing.sm,
   },
   errorContainer: {
-    backgroundColor: '#FFE6E6',
-    padding: 15,
-    margin: 16,
-    borderRadius: 10,
+    backgroundColor: '#FEF2F2',
+    padding: theme.spacing.base,
+    margin: theme.spacing.base,
+    borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: '#FFB6B6',
+    borderColor: '#FECACA',
   },
   errorText: {
-    color: '#D8000C',
-    fontSize: 14,
-    marginBottom: 10,
+    color: theme.colors.error,
+    fontSize: theme.typography.fontSize.sm,
+    marginBottom: theme.spacing.md,
   },
   retryButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 5,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.base,
+    borderRadius: theme.radius.md,
     alignSelf: 'flex-end',
   },
   retryButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
+    color: theme.colors.textOnPrimary,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.xxxl,
+  },
+  emptyIconContainer: {
+    marginBottom: theme.spacing.xl,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginTop: 16,
-    marginBottom: 8,
+    fontSize: theme.typography.fontSize.xxl,
+    fontWeight: theme.typography.fontWeight.bold,
+    color: theme.colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: theme.spacing.md,
   },
   emptyText: {
-    fontSize: 16,
-    color: '#666',
+    fontSize: theme.typography.fontSize.base,
+    color: theme.colors.textSecondary,
     textAlign: 'center',
-    marginBottom: 20,
+    lineHeight: theme.typography.lineHeight.relaxed * theme.typography.fontSize.base,
+    marginBottom: theme.spacing.xl,
+    maxWidth: 280,
   },
   emptyButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 25,
+    backgroundColor: theme.colors.primary,
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.radius.full,
+    ...theme.shadows.sm,
   },
   emptyButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: theme.colors.textOnPrimary,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
 });
 
