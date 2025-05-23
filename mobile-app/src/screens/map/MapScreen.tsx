@@ -4,7 +4,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   Text,
-  Dimensions,
   Alert,
   ActivityIndicator,
   Platform,
@@ -331,8 +330,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   map: {
-    width: Dimensions.get('window').width,
-    height: Dimensions.get('window').height,
+    flex: 1,
   },
   buttonContainer: {
     position: 'absolute',

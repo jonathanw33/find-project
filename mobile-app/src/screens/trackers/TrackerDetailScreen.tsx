@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
   Alert,
   Switch,
-  Dimensions,
   Platform,
 } from 'react-native';
 import { useSelector, useDispatch } from 'react-redux';
@@ -918,7 +917,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   mapContainer: {
-    height: Dimensions.get('window').height * 0.4, // Increased from 0.35 to 0.4
+    height: 300, // Fixed height instead of percentage
     width: '100%',
     marginBottom: 16,
     backgroundColor: 'lightgreen', // Debug color

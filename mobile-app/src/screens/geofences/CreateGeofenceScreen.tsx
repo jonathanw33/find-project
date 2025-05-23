@@ -9,7 +9,6 @@ import {
   Switch,
   ActivityIndicator,
   Alert,
-  // Dimensions, // Not used, can be removed
 } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
