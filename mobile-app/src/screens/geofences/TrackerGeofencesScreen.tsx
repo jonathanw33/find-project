@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -34,15 +34,23 @@ const TrackerGeofencesScreen: React.FC = () => {
   
   const [linkedGeofences, setLinkedGeofences] = useState<TrackerGeofenceProps[]>([]);
   const [loadingLinked, setLoadingLinked] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
-    loadLinkedGeofences();
-  }, [trackerId]);
+    if (isInitialLoad) {
+      loadLinkedGeofences();
+    }
+  }, [trackerId, isInitialLoad]);
 
-  const loadLinkedGeofences = async () => {
+  const loadLinkedGeofences = useCallback(async () => {
+    if (loadingLinked) return; // Prevent multiple simultaneous calls
+    
     try {
       setLoadingLinked(true);
+      console.log('Loading linked geofences for tracker:', trackerId);
+      
       const data = await getLinkedGeofences(trackerId);
+      console.log('Loaded linked geofences:', data);
       
       const formattedData = data.map(item => ({
         geofence: {
@@ -61,13 +69,16 @@ const TrackerGeofencesScreen: React.FC = () => {
       }));
       
       setLinkedGeofences(formattedData);
+      setIsInitialLoad(false);
     } catch (error) {
       console.error('Error loading linked geofences:', error);
-      Alert.alert('Error', 'Failed to load geofences');
+      if (isInitialLoad) {
+        Alert.alert('Error', 'Failed to load geofences');
+      }
     } finally {
       setLoadingLinked(false);
     }
-  };  const handleAddGeofence = () => {
+  }, [trackerId, getLinkedGeofences, loadingLinked, isInitialLoad]);  const handleAddGeofence = () => {
     // First show a list of available geofences to link
     const availableGeofences = geofences.filter(
       g => !linkedGeofences.some(lg => lg.geofence.id === g.id)
@@ -95,7 +106,7 @@ const TrackerGeofencesScreen: React.FC = () => {
     try {
       await updateTrackerGeofence(trackerId, geofenceId, alertOnEnter, alertOnExit);
       
-      // Update local state
+      // Update local state immediately for better UX
       setLinkedGeofences(prev => 
         prev.map(item => 
           item.geofence.id === geofenceId 
@@ -122,7 +133,7 @@ const TrackerGeofencesScreen: React.FC = () => {
             try {
               await unlinkTrackerFromGeofence(trackerId, geofenceId);
               
-              // Update local state
+              // Update local state immediately
               setLinkedGeofences(prev => 
                 prev.filter(item => item.geofence.id !== geofenceId)
               );
@@ -134,7 +145,12 @@ const TrackerGeofencesScreen: React.FC = () => {
         },
       ]
     );
-  };  const renderGeofenceItem = ({ item }: { item: TrackerGeofenceProps }) => (
+  };
+
+  const handleRefresh = useCallback(() => {
+    setIsInitialLoad(true);
+    loadLinkedGeofences();
+  }, [loadLinkedGeofences]);  const renderGeofenceItem = ({ item }: { item: TrackerGeofenceProps }) => (
     <View style={styles.geofenceItem}>
       <View style={styles.geofenceHeader}>
         <Text style={styles.geofenceName}>{item.geofence.name}</Text>
@@ -216,7 +232,7 @@ const TrackerGeofencesScreen: React.FC = () => {
         </View>
       </View>
     </View>
-  );  if (loading || loadingLinked) {
+  );  if (loadingLinked && isInitialLoad) {
     return (
       <View style={styles.centerContainer}>
         <ActivityIndicator size="large" color="#007AFF" />
@@ -241,6 +257,8 @@ const TrackerGeofencesScreen: React.FC = () => {
         renderItem={renderGeofenceItem}
         keyExtractor={(item) => item.geofence.id}
         contentContainerStyle={styles.listContent}
+        refreshing={loadingLinked && !isInitialLoad}
+        onRefresh={handleRefresh}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Ionicons name="location-outline" size={48} color="#CCC" />

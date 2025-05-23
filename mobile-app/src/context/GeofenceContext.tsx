@@ -170,16 +170,11 @@ export const GeofenceProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const getLinkedGeofences = async (trackerId: string): Promise<(Geofence & { alertOnEnter: boolean, alertOnExit: boolean })[]> => {
     try {
-      setLoading(true);
-      setError(null);
-      
+      // Don't set global loading state for this operation
       return await geofenceService.getLinkedGeofences(trackerId);
     } catch (err) {
-      setError(err.message);
       console.error("Error getting linked geofences:", err);
       throw err;
-    } finally {
-      setLoading(false);
     }
   };
 

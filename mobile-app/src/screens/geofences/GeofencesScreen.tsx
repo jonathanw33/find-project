@@ -68,7 +68,11 @@ const GeofencesScreen: React.FC = () => {
           <Text style={styles.geofenceDescription}>{item.description}</Text>
         )}
         <Text style={styles.geofenceDetails}>
-          {`Radius: ${Math.round(item.radius)}m • Created: ${new Date(item.createdAt).toLocaleDateString()}`}
+          {`Radius: ${Math.round(item.radius)}m • Created: ${new Date(item.createdAt).toLocaleDateString('en-US', { 
+            year: 'numeric', 
+            month: 'short', 
+            day: 'numeric' 
+          })}`}
         </Text>
       </View>
       
