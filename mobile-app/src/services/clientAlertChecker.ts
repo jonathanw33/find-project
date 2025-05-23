@@ -12,6 +12,9 @@ try {
 
 // Client-side geofence and scheduled alerts checking
 export const clientAlertChecker = {
+  // Track recent geofence checks to prevent duplicates
+  recentChecks: new Map<string, { latitude: number, longitude: number, timestamp: number }>(),
+
   // Initialize notifications
   async setupNotifications() {
     if (!Notifications) {
@@ -67,6 +70,34 @@ export const clientAlertChecker = {
   // Check for geofence crossings
   async checkGeofences(trackerId: string, latitude: number, longitude: number) {
     try {
+      // Prevent duplicate checks for the same location within 5 seconds
+      const checkKey = `${trackerId}`;
+      const lastCheck = this.recentChecks.get(checkKey);
+      const now = Date.now();
+      
+      if (lastCheck) {
+        const timeDiff = now - lastCheck.timestamp;
+        const locationDiff = this.calculateDistance(
+          latitude, longitude, 
+          lastCheck.latitude, lastCheck.longitude
+        );
+        
+        // Skip if same location checked within last 5 seconds or location hasn't moved significantly (< 1 meter)
+        if (timeDiff < 5000 && locationDiff < 1) {
+          return;
+        }
+      }
+      
+      // Update the last check record
+      this.recentChecks.set(checkKey, { latitude, longitude, timestamp: now });
+      
+      // Clean up old entries (older than 1 minute)
+      for (const [key, value] of this.recentChecks.entries()) {
+        if (now - value.timestamp > 60000) {
+          this.recentChecks.delete(key);
+        }
+      }
+
       // First check if movement alerts are enabled
       const movementAlertsSetting = await AsyncStorage.getItem('setting_movement_alerts');
       if (movementAlertsSetting !== 'true') {

@@ -33,9 +33,6 @@ import SelectGeofenceScreen from '../screens/geofences/SelectGeofenceScreen';
 import TrackerScheduledAlertsScreen from '../screens/scheduledAlerts/TrackerScheduledAlertsScreen';
 import CreateScheduledAlertScreen from '../screens/scheduledAlerts/CreateScheduledAlertScreen';
 
-// Simulation Screen
-import TrackerSimulationScreen from '../screens/simulation/TrackerSimulationScreen';
-
 // Define types for our navigation stacks
 export type AuthStackParamList = {
   Login: undefined;
@@ -59,8 +56,6 @@ export type MainStackParamList = {
   TrackerScheduledAlerts: { trackerId: string };
   CreateScheduledAlert: { trackerId: string };
   EditScheduledAlert: { trackerId: string, alertId: string };
-  // Simulation screen
-  TrackerSimulation: { trackerId: string };
 };
 
 export type TabStackParamList = {
@@ -235,13 +230,6 @@ const MainNavigator = () => {
         name="EditScheduledAlert" 
         component={CreateScheduledAlertScreen} 
         options={{ title: 'Edit Alert' }} 
-      />
-
-      {/* Simulation Screen */}
-      <MainStack.Screen 
-        name="TrackerSimulation" 
-        component={TrackerSimulationScreen} 
-        options={{ title: 'Tracker Simulation', headerShown: false }} 
       />
     </MainStack.Navigator>
   );

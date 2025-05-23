@@ -19,14 +19,16 @@ import { useSupabaseTrackers } from '../../hooks/useSupabaseTrackers';
 import { useAlert } from '../../context/AlertContext';
 import { useGeofence } from '../../context/GeofenceContext';
 import { useScheduledAlert } from '../../context/ScheduledAlertContext';
-import clientAlertChecker from '../../services/clientAlertChecker';
 import { RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { MainStackParamList } from '../../navigation';
 import { Ionicons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, Region } from 'react-native-maps'; // Added Region type
+import MapView, { Marker, Polyline, Region, Circle } from 'react-native-maps'; // Added Circle for geofences
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { markTrackerAsLost } from '../../utils/markTrackerLost';
+import { startGeofenceCrossingSimulation, stopSimulation as stopUtilsSimulation } from '../../utils/trackerSimulation';
+import { LocationPoint } from '../../redux/slices/trackerSlice';
+import { Geofence } from '../../services/geofence/geofenceService';
 
 
 type TrackerDetailScreenProps = {
@@ -49,7 +51,7 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
   const tracker = trackers[trackerId];
   
   const dispatch = useDispatch(); // Kept if other dispatches are needed later
-  const { startTrackerSimulation, stopTrackerSimulation } = useTracker();
+  const { startTrackerSimulation, stopTrackerSimulation, moveVirtualTracker } = useTracker();
   const { updateTrackerDetails: supabaseUpdateTrackerDetails, updateLocation, fetchTrackerHistory } = useSupabaseTrackers();
   const { simulateLeftBehindAlert } = useAlert();
   const { getLinkedGeofences } = useGeofence();
@@ -57,10 +59,13 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
   
   const [loading, setLoading] = useState(false);
   const [showLocationHistory, setShowLocationHistory] = useState(false);
+  const [showGeofences, setShowGeofences] = useState(false);
   const [isSimulating, setIsSimulating] = useState(false);
-  const [simulationPattern, setSimulationPattern] = useState<'random' | 'circle' | 'line'>('random');
+  const [simulationPattern, setSimulationPattern] = useState<'random' | 'circle' | 'line' | 'geofence_cross'>('random');
+  const [selectedGeofence, setSelectedGeofence] = useState<Geofence | null>(null);
   const [linkedGeofences, setLinkedGeofences] = useState([]);
   const [scheduledAlerts, setScheduledAlerts] = useState([]);
+  const [simulationGeofences, setSimulationGeofences] = useState<(Geofence & { alertOnEnter: boolean, alertOnExit: boolean })[]>([]);
   const mapRef = useRef<MapView>(null);
 
   // Load location history when component mounts
@@ -71,18 +76,6 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
     }
   }, [tracker?.id]);
   
-  // Check for geofence events when tracker location updates
-  useEffect(() => {
-    if (tracker?.lastSeen && tracker?.id) {
-      // Check if the tracker has crossed any geofences
-      clientAlertChecker.checkGeofences(
-        tracker.id, 
-        tracker.lastSeen.latitude, 
-        tracker.lastSeen.longitude
-      );
-    }
-  }, [tracker?.lastSeen?.latitude, tracker?.lastSeen?.longitude]);
-  
   const loadAdvancedAlertData = async () => {
     if (!tracker) return;
     
@@ -90,6 +83,12 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
       // Load geofences
       const geofences = await getLinkedGeofences(tracker.id);
       setLinkedGeofences(geofences);
+      setSimulationGeofences(geofences);
+      
+      // Auto-select first geofence if available for simulation
+      if (geofences.length > 0 && !selectedGeofence) {
+        setSelectedGeofence(geofences[0]);
+      }
       
       // Load scheduled alerts
       const alerts = await getScheduledAlertsForTracker(tracker.id);
@@ -206,8 +205,9 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
       // First update UI state
       setIsSimulating(false);
       
-      // Then stop the actual simulation
+      // Stop both simulation systems to be sure
       stopTrackerSimulation(trackerId);
+      stopUtilsSimulation(trackerId);
       
       // After stopping, fit to markers once to reset the view
       setTimeout(() => {
@@ -216,9 +216,37 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
         }
       }, 500);
     } else {
-      // Before starting, make sure location history is visible
-      if (!showLocationHistory) {
+      // Validate geofence cross simulation
+      if (simulationPattern === 'geofence_cross') {
+        if (simulationGeofences.length === 0) {
+          Alert.alert(
+            'No Geofences Available',
+            'You need to link at least one geofence to this tracker for geofence crossing simulation.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              { 
+                text: 'Manage Geofences', 
+                onPress: () => navigation.navigate('TrackerGeofences', { trackerId }) 
+              }
+            ]
+          );
+          return;
+        }
+        
+        if (!selectedGeofence) {
+          Alert.alert('Error', 'Please select a geofence for crossing simulation.');
+          return;
+        }
+      }
+      
+      // Before starting, make sure location history is visible for standard patterns
+      if (simulationPattern !== 'geofence_cross' && !showLocationHistory) {
         setShowLocationHistory(true);
+      }
+      
+      // Show geofences for geofence cross simulation
+      if (simulationPattern === 'geofence_cross' && !showGeofences) {
+        setShowGeofences(true);
       }
       
       // First fit to markers to get a good view of the simulation area
@@ -227,8 +255,12 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
           latitude: tracker.lastSeen.latitude,
           longitude: tracker.lastSeen.longitude,
           // Use a wider view for simulation so user can see movement
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
+          latitudeDelta: simulationPattern === 'geofence_cross' && selectedGeofence 
+            ? Math.max(0.01, selectedGeofence.radius / 2500) 
+            : 0.01,
+          longitudeDelta: simulationPattern === 'geofence_cross' && selectedGeofence 
+            ? Math.max(0.01, selectedGeofence.radius / 2500) 
+            : 0.01,
         }, 500);
       }
       
@@ -237,17 +269,88 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
       
       // Short delay before starting simulation to let UI updates complete
       setTimeout(() => {
-        startTrackerSimulation(trackerId, simulationPattern);
+        if (simulationPattern === 'geofence_cross' && selectedGeofence) {
+          // Stop any existing TrackerContext simulation first
+          stopTrackerSimulation(trackerId);
+          
+          // Use utils simulation for geofence crossing
+          const trackerLocation: LocationPoint = tracker.lastSeen || {
+            latitude: region.latitude,
+            longitude: region.longitude,
+            timestamp: Date.now(),
+          };
+          
+          console.log('Starting geofence cross simulation with geofence:', selectedGeofence.name);
+          
+          startGeofenceCrossingSimulation(
+            trackerId,
+            trackerLocation,
+            selectedGeofence,
+            async (location) => {
+              // This callback will be called with each location update
+              // We need to update the tracker location in Redux store
+              console.log('Geofence simulation update:', location.latitude, location.longitude);
+              try {
+                await moveVirtualTracker(trackerId, location);
+              } catch (error) {
+                console.error('Error updating tracker location during geofence simulation:', error);
+              }
+            }
+          );
+        } else {
+          // Stop any existing utils simulation first
+          stopUtilsSimulation(trackerId);
+          
+          // Use TrackerContext simulation for regular patterns
+          startTrackerSimulation(trackerId, simulationPattern);
+        }
       }, 300);
     }
   };
 
-  const handleChangeSimulationPattern = (pattern: 'random' | 'circle' | 'line') => {
+  const handleChangeSimulationPattern = (pattern: 'random' | 'circle' | 'line' | 'geofence_cross') => {
     if (!tracker) return;
     setSimulationPattern(pattern);
     if (isSimulating) {
+      // Stop current simulation
       stopTrackerSimulation(trackerId);
-      startTrackerSimulation(trackerId, pattern);
+      stopUtilsSimulation(trackerId);
+      
+      // Start new simulation with new pattern
+      setTimeout(() => {
+        if (pattern === 'geofence_cross' && selectedGeofence) {
+          // Stop any existing TrackerContext simulation first
+          stopTrackerSimulation(trackerId);
+          
+          const trackerLocation: LocationPoint = tracker.lastSeen || {
+            latitude: region.latitude,
+            longitude: region.longitude,
+            timestamp: Date.now(),
+          };
+          
+          console.log('Changing to geofence cross simulation with geofence:', selectedGeofence.name);
+          
+          startGeofenceCrossingSimulation(
+            trackerId,
+            trackerLocation,
+            selectedGeofence,
+            async (location) => {
+              // Location updates for geofence simulation
+              console.log('Geofence simulation pattern change update:', location.latitude, location.longitude);
+              try {
+                await moveVirtualTracker(trackerId, location);
+              } catch (error) {
+                console.error('Error updating tracker location during geofence simulation:', error);
+              }
+            }
+          );
+        } else if (pattern !== 'geofence_cross') {
+          // Stop any existing utils simulation first
+          stopUtilsSimulation(trackerId);
+          
+          startTrackerSimulation(trackerId, pattern);
+        }
+      }, 100);
     }
   };
 
@@ -442,6 +545,31 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                 ))}
               </>
             )}
+
+            {/* Display geofences when enabled */}
+            {showGeofences && simulationGeofences
+              .filter((geofence) => 
+                geofence && 
+                geofence.centerLatitude != null && 
+                geofence.centerLongitude != null && 
+                geofence.radius != null &&
+                !isNaN(geofence.centerLatitude) &&
+                !isNaN(geofence.centerLongitude) &&
+                !isNaN(geofence.radius)
+              )
+              .map((geofence) => (
+              <Circle
+                key={geofence.id}
+                center={{
+                  latitude: Number(geofence.centerLatitude),
+                  longitude: Number(geofence.centerLongitude),
+                }}
+                radius={Number(geofence.radius)}
+                strokeWidth={2}
+                strokeColor={selectedGeofence?.id === geofence.id ? '#FF3B30' : '#007AFF'}
+                fillColor={selectedGeofence?.id === geofence.id ? 'rgba(255, 59, 48, 0.2)' : 'rgba(0, 122, 255, 0.1)'}
+              />
+            ))}
               </MapView>
 
               <View style={styles.mapControls}>
@@ -451,11 +579,25 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                 >
                   <Ionicons
                     name={showLocationHistory ? 'trail-sign' : 'trail-sign-outline'}
-                    size={24}
+                    size={20}
                     color="#007AFF"
                   />
                   <Text style={styles.mapControlText}>
                     {showLocationHistory ? 'Hide History' : 'Show History'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.mapControlButton}
+                  onPress={() => setShowGeofences(!showGeofences)}
+                >
+                  <Ionicons
+                    name={showGeofences ? 'location' : 'location-outline'}
+                    size={20}
+                    color="#007AFF"
+                  />
+                  <Text style={styles.mapControlText}>
+                    {showGeofences ? 'Hide Geofences' : 'Show Geofences'}
                   </Text>
                 </TouchableOpacity>
 
@@ -464,7 +606,7 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                     style={styles.mapControlButton}
                     onPress={zoomToFitMarkers}
                   >
-                    <Ionicons name="expand-outline" size={24} color="#007AFF" />
+                    <Ionicons name="expand-outline" size={20} color="#007AFF" />
                     <Text style={styles.mapControlText}>Fit View</Text>
                   </TouchableOpacity>
                 )}
@@ -600,7 +742,7 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
             <Text style={styles.sectionTitle}>Simulation Controls</Text>
             <View style={styles.simulationPatterns}>
               {/* Pattern Buttons */}
-              {(['random', 'circle', 'line'] as const).map((pattern) => (
+              {(['random', 'circle', 'line', 'geofence_cross'] as const).map((pattern) => (
                 <TouchableOpacity
                   key={pattern}
                   style={[
@@ -614,9 +756,10 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                     name={
                       pattern === 'random' ? 'shuffle' :
                       pattern === 'circle' ? 'ellipse-outline' :
-                      'trending-up-outline'
+                      pattern === 'line' ? 'trending-up-outline' :
+                      'map-outline'
                     }
-                    size={20}
+                    size={16}
                     color={simulationPattern === pattern ? '#fff' : '#007AFF'}
                   />
                   <Text
@@ -625,11 +768,64 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
                       simulationPattern === pattern && styles.patternButtonTextActive,
                     ]}
                   >
-                    {pattern.charAt(0).toUpperCase() + pattern.slice(1)}
+                    {pattern === 'geofence_cross' ? 'Geofence Cross' : pattern.charAt(0).toUpperCase() + pattern.slice(1)}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
+            
+            {/* Geofence Selection for Geofence Cross Pattern */}
+            {simulationPattern === 'geofence_cross' && (
+              <View style={styles.geofenceSelector}>
+                <Text style={styles.geofenceSelectorLabel}>Select Geofence to Cross:</Text>
+                {simulationGeofences.length > 0 ? (
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.geofenceScrollView}
+                  >
+                    {simulationGeofences.map((geofence) => (
+                      <TouchableOpacity
+                        key={geofence.id}
+                        style={[
+                          styles.geofenceButton,
+                          selectedGeofence?.id === geofence.id && styles.geofenceButtonSelected,
+                        ]}
+                        onPress={() => setSelectedGeofence(geofence)}
+                      >
+                        <Text
+                          style={[
+                            styles.geofenceButtonText,
+                            selectedGeofence?.id === geofence.id && styles.geofenceButtonTextSelected,
+                          ]}
+                        >
+                          {geofence.name}
+                        </Text>
+                        <Text style={[
+                          styles.geofenceButtonRadius,
+                          selectedGeofence?.id === geofence.id && styles.geofenceButtonRadiusSelected
+                        ]}>
+                          {Math.round(geofence.radius)}m
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                ) : (
+                  <View style={styles.noGeofencesContainer}>
+                    <Text style={styles.noGeofencesText}>
+                      No geofences linked to this tracker.
+                    </Text>
+                    <TouchableOpacity
+                      style={styles.addGeofenceButton}
+                      onPress={() => navigation.navigate('TrackerGeofences', { trackerId })}
+                    >
+                      <Ionicons name="add" size={16} color="#007AFF" />
+                      <Text style={styles.addGeofenceButtonText}>Add Geofences</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            )}
             <TouchableOpacity
               style={[
                 styles.simulationButton,
@@ -655,16 +851,6 @@ const TrackerDetailScreen: React.FC<TrackerDetailScreenProps> = ({ route, naviga
               <Ionicons name="notifications" size={24} color="#fff" />
               <Text style={styles.simulationButtonText}>
                 Simulate "Left Behind" Alert
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.advancedSimulationButton}
-              onPress={() => navigation.navigate('TrackerSimulation', { trackerId: tracker.id })}
-              disabled={loading}
-            >
-              <Ionicons name="flask" size={24} color="#fff" />
-              <Text style={styles.simulationButtonText}>
-                Advanced Simulation
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -769,9 +955,9 @@ const styles = StyleSheet.create({
   },
   mapControlButton: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 16,
     flexDirection: 'row',
     alignItems: 'center',
     shadowColor: '#000',
@@ -779,11 +965,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 3,
     elevation: 5,
-    marginHorizontal: 5, // Add some margin between buttons
+    marginHorizontal: 2, // Smaller margin since we have 3 buttons now
   },
   mapControlText: {
-    marginLeft: 6,
-    fontSize: 13, // Slightly smaller text
+    marginLeft: 4,
+    fontSize: 12, // Smaller text for 3 buttons
     color: '#007AFF',
     fontWeight: '500',
   },
@@ -902,21 +1088,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10, // Increased padding
-    paddingHorizontal: 8, // Adjust horizontal for icon and text
-    borderWidth: 1.5, // Slightly thicker border
+    paddingVertical: 8, 
+    paddingHorizontal: 6, // Smaller padding for 4 buttons
+    borderWidth: 1.5,
     borderColor: '#007AFF',
-    borderRadius: 20,
-    flex: 1, // Allow buttons to share space
-    marginHorizontal: 4, // Space between buttons
+    borderRadius: 16,
+    flex: 1,
+    marginHorizontal: 2, // Smaller margin for 4 buttons
   },
   patternButtonActive: {
     backgroundColor: '#007AFF',
   },
   patternButtonText: {
-    fontSize: 13, // Adjusted size
+    fontSize: 11, // Smaller for 4 buttons
     color: '#007AFF',
-    marginLeft: 6, // Space from icon
+    marginLeft: 4, // Space from icon
     fontWeight: '500',
   },
   patternButtonTextActive: {
@@ -943,15 +1129,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 8,
     backgroundColor: '#FF9500', // Orange for alert simulation
-  },
-  advancedSimulationButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    borderRadius: 8,
-    backgroundColor: '#8E44AD', // Purple for advanced simulation
-    marginTop: 12,
   },
   lostButton: {
     flexDirection: 'row',
@@ -983,6 +1160,77 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     marginLeft: 8,
+  },
+  geofenceSelector: {
+    marginBottom: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    padding: 12,
+  },
+  geofenceSelectorLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#555',
+    marginBottom: 8,
+  },
+  geofenceScrollView: {
+    marginHorizontal: -4, // Offset the horizontal margin of buttons
+  },
+  geofenceButton: {
+    backgroundColor: '#ffffff',
+    padding: 10,
+    borderRadius: 8,
+    marginHorizontal: 4,
+    minWidth: 100,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+  },
+  geofenceButtonSelected: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  geofenceButtonText: {
+    color: '#333',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  geofenceButtonTextSelected: {
+    color: '#fff',
+  },
+  geofenceButtonRadius: {
+    color: '#777',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  geofenceButtonRadiusSelected: {
+    color: 'rgba(255, 255, 255, 0.8)',
+  },
+  noGeofencesContainer: {
+    alignItems: 'center',
+    padding: 16,
+  },
+  noGeofencesText: {
+    color: '#777',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  addGeofenceButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 122, 255, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  addGeofenceButtonText: {
+    color: '#007AFF',
+    fontSize: 13,
+    fontWeight: '500',
+    marginLeft: 4,
   },
 });
 
